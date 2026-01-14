@@ -1,0 +1,892 @@
+#!/system/bin/sh
+# ---------------------------------------------------------------------------------------
+# 🚀 Su Scheduler - The Modern Android Task Scheduler 🚀
+# ---------------------------------------------------------------------------------------
+# Author: Rex Ackermann
+# ---------------------------------------------------------------------------------------
+
+# Version
+VERSION="1.3.2"
+
+# 🧹 Clean environment
+unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
+export PATH="/system/bin:/system/xbin:/vendor/bin"
+
+# Paths
+# 📂 Paths to our treasure chest
+DATA_DIR="/data/adb/su-scheduler"           # Where the magic is stored
+CONFIG_FILE="/sdcard/Documents/su-scheduler/config.txt" # The master schedule
+LOG_FILE="$DATA_DIR/su-scheduler.log"              # The historical record
+DAEMON_BINARY="/system/bin/su-schedulerd"    # The engine room
+TASKS_DIR="$DATA_DIR/tasks"                  # Task process storage
+SHELLS_DIR="$DATA_DIR/shells"                # Interactive shell sessions
+
+# 🌈 Color Palette - Making the terminal pop!
+RED='\033[38;5;196m'        # Vibrant Red
+GREEN='\033[38;5;46m'       # Electric Green
+BLUE='\033[38;5;39m'        # Sky Blue
+YELLOW='\033[38;5;226m'     # Bright Gold
+MAGENTA='\033[38;5;201m'    # Neon Magenta
+CYAN='\033[38;5;51m'        # Tropical Cyan
+BOLD='\033[1m'              # Thick and Bold
+RESET='\033[0m'             # Back to reality
+
+# 🎭 Function to display our gorgeous ASCII banner
+print_banner() {
+    # It's not just a script, it's a brand!
+    echo -e "${CYAN}${BOLD}   _____           _____      _              _       _            ${RESET}"
+    echo -e "${CYAN}${BOLD}  / ____|         / ____|    | |            | |     | |           ${RESET}"
+    echo -e "${BLUE}${BOLD} | (___   _   _  | (___   ___| |__   ___  __| |_   _| | ___ _ __  ${RESET}"
+    echo -e "${BLUE}${BOLD}  \___ \ | | | |  \___ \ / __| '_ \ / _ \/ _\` | | | | |/ _ \ '__| ${RESET}"
+    echo -e "${MAGENTA}${BOLD}  ____) || |_| |  ____) | (__| | | |  __/ (_| | |_| | |  __/ |    ${RESET}"
+    echo -e "${MAGENTA}${BOLD} |_____/  \__,_| |_____/ \___|_| |_|\___|\__,_|\__,_|_|\___|_|    ${RESET}"
+    echo -e "                                                                   "
+}
+
+# 📖 The "How To" Guide - Clean, organized, and helpful
+print_help() {
+    print_banner
+    echo -e "${BOLD}Usage:${RESET} su-scheduler ${YELLOW}[command]${RESET} ${GREEN}[args]${RESET}"
+    echo ""
+    echo -e "  ${GREEN}add${RESET} ${CYAN}<trigger>${RESET} ${BOLD}<cmd>${RESET}     Add a new mission 📝"
+    echo -e "      ${YELLOW}Triggers:${RESET}"
+    echo -e "        ${CYAN}boot${RESET}                    Run on every boot"
+    echo -e "        ${CYAN}HH:MM${RESET} or ${CYAN}HHMM${RESET}           Daily at specific time"
+    echo -e "        ${CYAN}weekly:DAY:HHMM${RESET}         Weekly (1=Mon, 7=Sun)"
+    echo -e "        ${CYAN}nweekly:N:DAY:HHMM${RESET}      Every N weeks"
+    echo -e "        ${CYAN}monthly:DD:HHMM${RESET}         Monthly on day DD"
+    echo -e "        ${CYAN}nmonthly:N:DD:HHMM${RESET}      Every N months"
+    echo -e "        ${CYAN}yearly:MM:DD:HHMM${RESET}       Yearly on MM/DD"
+    echo -e "      ${YELLOW}Modifiers:${RESET}"
+    echo -e "        ${CYAN}: --delete${RESET}           Run once and self-destruct 💥"
+    echo -e "        ${CYAN}: --boot${RESET}             Also run on every boot 🏁"
+    echo -e "        ${CYAN}: --notify${RESET}           Notify on start & completion 📢"
+    echo -e "        ${CYAN}: --notify-start${RESET}     Notify only on start 🚀"
+    echo -e "        ${CYAN}: --notify-end${RESET}       Notify only on completion ✅"
+    echo -e "        ${CYAN}: --msg=\"text\"${RESET}       Custom notification message 💬"
+    echo -e "        ${CYAN}: --interactive${RESET}      Run in interactive shell mode 🎮"
+    echo -e "        ${CYAN}: --termux${RESET}           Execute in Termux environment 🐧"
+    echo -e ""
+    echo -e "  ${GREEN}list${RESET} ${MAGENTA}[pattern]${RESET}            View the master schedule 🧐"
+    echo -e "  ${GREEN}remove${RESET} ${RED}<line|pattern>${RESET}      Nuke an entry 💥"
+    echo -e "  ${GREEN}edit${RESET} ${CYAN}[editor]${RESET}             Crack open the config 🎨"
+    echo -e "  ${GREEN}log${RESET} ${YELLOW}[-f|-n NUM]${RESET}          View logs (-f=follow, -n=lines) 🕵️"
+    echo -e "  ${GREEN}tasks${RESET}                    List all running tasks 📋"
+    echo -e "  ${GREEN}task-info${RESET} ${CYAN}<task_id>${RESET}       Get detailed task info 🔍"
+    echo -e "  ${GREEN}task-output${RESET} ${CYAN}<task_id>${RESET}     View task output 📄"
+    echo -e "  ${GREEN}task-kill${RESET} ${RED}<task_id>${RESET}       Terminate a task 💀"
+    echo -e "  ${GREEN}shell-attach${RESET} ${CYAN}<task_id>${RESET}    Attach to interactive shell 🎮"
+    echo -e "  ${GREEN}shell-send${RESET} ${CYAN}<task_id>${RESET} ${BOLD}<cmd>${RESET} Send command to shell 📤"
+    echo -e "  ${GREEN}exec${RESET} ${BOLD}<command>${RESET}            Execute command directly 🔧"
+    echo -e "  ${GREEN}examples${RESET} ${CYAN}[restore]${RESET}        Manage/restore example scripts 💡"
+    echo -e "  ${GREEN}test${RESET}                     Run system test suite 🧪"
+    echo -e "  ${GREEN}status${RESET}                   Check daemon pulse 💓"
+    echo -e "  ${GREEN}restart${RESET}                  Kickstart the engine 🔄"
+    echo -e "  ${GREEN}stop${RESET}                     Shut it down 💀"
+    echo -e "  ${GREEN}help${RESET} ${CYAN}[section]${RESET}           Show full documentation 📚"
+    echo -e "      ${YELLOW}Sections:${RESET} --interactive, --termux, --scheduling"
+    echo -e "      ${YELLOW}Pagers:${RESET} --bat (force bat), --less (force less)"
+    echo ""
+    echo -e "  ${BOLD}${CYAN}Examples:${RESET}"
+    echo -e "    ${BOLD}# Daily tasks${RESET}"
+    echo -e "    su-scheduler add 08:00 logcat -c; : --notify"
+    echo -e "    ${BOLD}# Weekly tasks${RESET}"
+    echo -e "    su-scheduler add weekly:1:0900 'echo Monday backup'"
+    echo -e "    ${BOLD}# Monthly tasks${RESET}"
+    echo -e "    su-scheduler add monthly:01:0000 'echo First of month'"
+    echo -e "    ${BOLD}# Yearly tasks${RESET}"
+    echo -e "    su-scheduler add yearly:12:25:0800 'echo Merry Christmas'"
+    echo -e "    ${BOLD}# Boot tasks${RESET}"
+    echo -e "    su-scheduler add boot settings put global airplane_mode_on 1"
+    echo -e "    ${BOLD}# Direct execution${RESET}"
+    echo -e "    su-scheduler exec 'pm list packages | grep google'"
+}
+
+# ➕ Logic for adding new tasks
+cmd_add() {
+    trigger=$1
+    shift
+    # Ensure they actually gave us a command to run
+    if [ -z "$1" ]; then
+        echo -e "${RED}${BOLD}❌ Error:${RESET} No command provided. I can't schedule silence!"
+        exit 1
+    fi
+    # Support both 0800 and 08:30 formats
+    if echo "$trigger" | grep -q ":"; then
+        trigger=$(echo "$trigger" | sed 's/://g')
+    fi
+    
+    cmd="$*" # Capture everything else as the command
+    
+    # 🕵️ Validation - Ensure trigger is either 'boot' or 4 digits
+    if [ "$trigger" != "boot" ] && ! echo "$trigger" | grep -qE '^[0-9]{4}$'; then
+        echo -e "${RED}${BOLD}❌ Error:${RESET} Invalid trigger '${YELLOW}$trigger${RESET}'. Use 'boot' or HH:MM."
+        exit 1
+    fi
+
+    # ✍️ Persist the change
+    echo "$trigger $cmd" >> "$CONFIG_FILE"
+    echo -e "${GREEN}${BOLD}✅ Success!${RESET} New mission added to the vault."
+}
+
+# 📜 Logic for listing scheduled tasks
+cmd_list() {
+    pattern=${1:-.} # Default to showing everything
+    echo -e "${BOLD}${MAGENTA}📋 Current Schedule:${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        echo -e "${YELLOW}Empty. No tasks scheduled yet.${RESET}"
+        return
+    fi
+    
+    # 🎨 Colorize the list based on task type
+    grep -iE "$pattern" "$CONFIG_FILE" | nl -w2 -s'. ' | while read -r line; do
+        if echo "$line" | grep -qi "boot "; then
+             echo -e "${YELLOW}$line${RESET} ${CYAN}🏁${RESET}"
+        elif echo "$line" | grep -q "\-\-delete"; then
+             echo -e "${RED}$line${RESET} ${MAGENTA}💥${RESET}"
+        elif echo "$line" | grep -q "\-\-notify"; then
+             echo -e "${CYAN}$line${RESET} ${GREEN}📢${RESET}"
+        elif echo "$line" | grep -q "\-\-interactive"; then
+             echo -e "${MAGENTA}$line${RESET} ${BLUE}🎮${RESET}"
+        else
+             echo -e "$line"
+        fi
+    done
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+}
+
+# 🗑️ Logic for removing tasks (by line number or text match)
+cmd_remove() {
+    if [ -z "$1" ]; then
+        echo -e "${RED}${BOLD}❌ Error:${RESET} Who should I remove? Give me a line number or pattern."
+        exit 1
+    fi
+    
+    if echo "$1" | grep -qE '^[0-9]+$'; then
+        # 📏 Line number removal
+        lines=$(wc -l < "$CONFIG_FILE")
+        if [ "$1" -gt "$lines" ] || [ "$1" -lt 1 ]; then
+            echo -e "${RED}${BOLD}❌ Error:${RESET} Line #$1 is out of bounds."
+            exit 1
+        fi
+        sed -i "${1}d" "$CONFIG_FILE"
+        echo -e "${GREEN}${BOLD}💥 Boom!${RESET} Task #$1 has been vaporized."
+    else
+        # 🔎 Pattern removal
+        trigger=$1
+        [ -n "$(echo "$trigger" | grep ":")" ] && trigger=$(echo "$trigger" | sed 's/://g')
+        count=$(grep -c "$trigger" "$CONFIG_FILE" || true)
+        if [ "$count" -eq 0 ]; then
+            echo -e "${YELLOW}🔎 No tasks matching '$trigger' were found.${RESET}"
+        else
+            sed -i "/$trigger/d" "$CONFIG_FILE"
+            echo -e "${GREEN}${BOLD}💥 Cleared!${RESET} $count task(s) matching '$trigger' removed."
+        fi
+    fi
+}
+
+# 🖌️ Open config in an editor
+cmd_edit() {
+    editor=${1:-}
+    if [ -n "$editor" ]; then
+        $editor "$CONFIG_FILE"
+    elif command -v nano >/dev/null; then
+        nano "$CONFIG_FILE"
+    elif command -v vim >/dev/null; then
+        vim "$CONFIG_FILE"
+    elif command -v vi >/dev/null; then
+        vi "$CONFIG_FILE"
+    else
+        echo -e "${RED}❌ No editor found. Pass one as an argument!${RESET}"
+    fi
+}
+
+# 🕵️ View logs
+cmd_log() {
+    if [ ! -f "$LOG_FILE" ]; then
+        echo -e "${YELLOW}Silence... No logs have been written yet.${RESET}"
+        return
+    fi
+    
+    if [ "$1" = "-f" ]; then
+         echo -e "${CYAN}${BOLD}👀 Tailing logs... Press Ctrl+C to stop spying.${RESET}"
+         tail -f "$LOG_FILE"
+    elif [ "$1" = "-n" ] && [ -n "$2" ]; then
+         tail -n "$2" "$LOG_FILE"
+    else
+         echo -e "${BOLD}${MAGENTA}📖 Historical Log (Last 20):${RESET}"
+         tail -n 20 "$LOG_FILE"
+    fi
+}
+
+# 📋 List all running tasks
+cmd_tasks() {
+    echo -e "${BOLD}${CYAN}📋 Active Tasks:${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    
+    if [ ! -d "$TASKS_DIR" ] || [ -z "$(ls -A "$TASKS_DIR" 2>/dev/null)" ]; then
+        echo -e "${YELLOW}No active tasks found.${RESET}"
+        return
+    fi
+    
+    for task_dir in "$TASKS_DIR"/*; do
+        if [ -d "$task_dir" ]; then
+            task_id=$(basename "$task_dir")
+            status="UNKNOWN"
+            pid="N/A"
+            command="N/A"
+            
+            [ -f "$task_dir/status.txt" ] && status=$(cat "$task_dir/status.txt")
+            [ -f "$task_dir/pid.txt" ] && pid=$(cat "$task_dir/pid.txt")
+            [ -f "$task_dir/command.txt" ] && command=$(cat "$task_dir/command.txt")
+            
+            # Check if process is still alive
+            if [ "$pid" != "N/A" ] && [ -d "/proc/$pid" ]; then
+                status_color="${GREEN}"
+                status="RUNNING"
+            elif [ "$status" = "SUCCESS" ]; then
+                status_color="${GREEN}"
+            elif [ "$status" = "FAILED" ]; then
+                status_color="${RED}"
+            else
+                status_color="${YELLOW}"
+            fi
+            
+            echo -e "${BOLD}Task ID:${RESET} ${CYAN}$task_id${RESET}"
+            echo -e "  Status: ${status_color}$status${RESET} | PID: $pid"
+            echo -e "  Command: ${MAGENTA}$command${RESET}"
+            echo ""
+        fi
+    done
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+}
+
+# 🔍 Get detailed task information
+cmd_task_info() {
+    task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}❌ Provide a task ID.${RESET}"
+        exit 1
+    fi
+    
+    task_dir="$TASKS_DIR/$task_id"
+    if [ ! -d "$task_dir" ]; then
+        echo -e "${RED}❌ Task not found: $task_id${RESET}"
+        exit 1
+    fi
+    
+    echo -e "${BOLD}${CYAN}🔍 Task Information: $task_id${RESET}"
+    echo -e "${BLUE}============================================================${RESET}"
+    
+    [ -f "$task_dir/command.txt" ] && echo -e "${BOLD}Command:${RESET} $(cat "$task_dir/command.txt")"
+    [ -f "$task_dir/status.txt" ] && echo -e "${BOLD}Status:${RESET} $(cat "$task_dir/status.txt")"
+    [ -f "$task_dir/pid.txt" ] && echo -e "${BOLD}PID:${RESET} $(cat "$task_dir/pid.txt")"
+    [ -f "$task_dir/start_time.txt" ] && echo -e "${BOLD}Started:${RESET} $(cat "$task_dir/start_time.txt")"
+    [ -f "$task_dir/end_time.txt" ] && echo -e "${BOLD}Ended:${RESET} $(cat "$task_dir/end_time.txt")"
+    [ -f "$task_dir/exit_code.txt" ] && echo -e "${BOLD}Exit Code:${RESET} $(cat "$task_dir/exit_code.txt")"
+    
+    echo -e "${BLUE}============================================================${RESET}"
+}
+
+# 📄 View task output
+cmd_task_output() {
+    task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}❌ Provide a task ID.${RESET}"
+        exit 1
+    fi
+    
+    task_dir="$TASKS_DIR/$task_id"
+    output_file="$task_dir/output.log"
+    
+    if [ ! -f "$output_file" ]; then
+        echo -e "${YELLOW}No output file found for task: $task_id${RESET}"
+        exit 1
+    fi
+    
+    echo -e "${BOLD}${MAGENTA}📄 Task Output: $task_id${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    cat "$output_file"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+}
+
+# 💀 Kill# 📄 detailed task output
+cmd_task_output() {
+    task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}Error: Task ID required.${RESET}"
+        return 1
+    fi
+    
+    output_file="$TASKS_DIR/$task_id/output.log"
+    if [ -f "$output_file" ]; then
+        echo -e "${CYAN}${BOLD}📜 Output for $task_id:${RESET}"
+        cat "$output_file"
+    else
+        # Check if it's an interactive shell output
+        shell_out="$SHELLS_DIR/$task_id.out"
+        if [ -f "$shell_out" ]; then
+            echo -e "${CYAN}${BOLD}📜 Shell Output for $task_id:${RESET}"
+            cat "$shell_out"
+        else
+            echo -e "${RED}❌ No output found for task $task_id${RESET}"
+        fi
+    fi
+}
+
+# 💡 Manage example scripts
+cmd_examples() {
+    local action="$1"
+    local target_dir="/sdcard/Documents/su-scheduler"
+    
+    if [ "$action" == "restore" ] || [ "$action" == "init" ]; then
+        echo -e "${BLUE}${BOLD}📂 Restoring examples to $target_dir...${RESET}"
+        mkdir -p "$target_dir"
+        
+        # Helper function to safely create script
+        create_script() {
+            local name="$1"
+            local path="$target_dir/$name"
+            
+            if [ -f "$path" ]; then
+                echo -e "${YELLOW}⚠️  Skipping $name (already exists)${RESET}"
+            else
+                cat > "$path"
+                chmod +x "$path"
+                echo -e "${GREEN}✅ Created: $name${RESET}"
+            fi
+        }
+
+        # Handle Config File
+        if [ -f "$target_dir/config.txt" ]; then
+             echo -e "${YELLOW}⚠️  config.txt exists. Creating config.example.txt instead.${RESET}"
+             CONFIG_NAME="config.example.txt"
+        else
+             CONFIG_NAME="config.txt"
+        fi
+        
+        # Write Config (Default Template)
+        cat << 'EOF' > "$target_dir/$CONFIG_NAME"
+# ═══════════════════════════════════════════════════════════════════════════
+# 🔥 Su Scheduler Configuration File 🔥
+# ═══════════════════════════════════════════════════════════════════════════
+# Author: Rex Ackermann
+# Location: /sdcard/Documents/su-scheduler/config.txt
+# Edit: su-scheduler edit
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 📖 QUICK START GUIDE
+# ═══════════════════════════════════════════════════════════════════════════
+# Format: <trigger> <command>; : <modifiers>
+#
+# TRIGGERS:
+#   boot              - Run on every boot
+#   HHMM or HH:MM     - Daily at specific time (e.g., 0830 or 08:30)
+#   weekly:DAY:HHMM   - Weekly (1=Mon, 7=Sun) e.g., weekly:1:0800
+#   monthly:DD:HHMM   - Monthly on day DD e.g., monthly:15:1200
+#   yearly:MM:DD:HHMM - Yearly e.g., yearly:01:01:0000
+#
+# MODIFIERS:
+#   : --delete        - Run once and remove from schedule
+#   : --boot          - Also run on boot (for time-based tasks)
+#   : --notify        - Send notification on start & completion
+#   : --notify-start  - Notify only on start
+#   : --notify-end    - Notify only on completion
+#   : --msg="text"    - Custom notification message
+#   : --interactive   - Run in interactive shell mode
+#   : --termux        - Execute in Termux environment
+#
+# COMMANDS:
+#   su-scheduler add <trigger> "<command>"  - Add new task
+#   su-scheduler list                       - List all tasks
+#   su-scheduler remove <line>              - Remove task
+#   su-scheduler edit                       - Edit this file
+#   su-scheduler log -f                     - Follow logs
+#   su-scheduler tasks                      - List running tasks
+#   su-scheduler help                       - Show full documentation
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🏁 BOOT TASKS - Run when device starts
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Example: Create boot marker
+# boot touch /sdcard/Documents/su-scheduler/boot-$(date +%Y%m%d-%H%M%S).log
+
+# Example: Start interactive shell for debugging
+# boot sh; : --interactive
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ⏰ TIME-BASED TASKS - Run at specific times daily
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Example: Clear logs every morning at 8 AM
+# 08:00 logcat -c; : --notify-end --msg="Logs cleared"
+
+# Example: Backup at 3 AM
+# 03:00 /sdcard/Documents/su-scheduler/backup.sh; : --notify
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 📅 WEEKLY TASKS - Run on specific day of week
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Example: Weekly backup every Sunday at 11 PM
+# weekly:7:2300 /sdcard/Documents/su-scheduler/weekly-backup.sh; : --notify
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🐧 TERMUX TASKS - Execute in Termux environment
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Example: Python script in Termux
+# 09:00 python /sdcard/Documents/su-scheduler/backup.py; : --termux --notify
+
+# Example: Update Termux packages on boot
+# boot pkg update && pkg upgrade -y; : --termux --notify-end
+EOF
+        echo -e "${GREEN}✅ Created: $CONFIG_NAME${RESET}"
+        
+        # Example: Backup Script
+        create_script "backup.sh" << 'EOF'
+#!/system/bin/sh
+# Example backup script for Su Scheduler
+# Usage: su-scheduler add 03:00 "/sdcard/Documents/su-scheduler/backup.sh; : --notify"
+
+echo "=== Backup Started at $(date) ==="
+
+# Create backup directory
+BACKUP_DIR="/sdcard/Documents/su-scheduler/backups/$(date +%Y%m%d)"
+mkdir -p "$BACKUP_DIR"
+
+# Backup important directories
+echo "Backing up Documents..."
+tar -czf "$BACKUP_DIR/documents.tar.gz" /sdcard/Documents/ 2>/dev/null
+echo "Backing up DCIM..."
+tar -czf "$BACKUP_DIR/pictures.tar.gz" /sdcard/DCIM/ 2>/dev/null
+
+# Clean old backups (older than 30 days)
+echo "Cleaning old backups..."
+find /sdcard/Documents/su-scheduler/backups/ -type f -mtime +30 -delete
+
+echo "=== Backup Complete ==="
+EOF
+
+        # Example: Maintenance Script
+        create_script "maintenance.sh" << 'EOF'
+#!/system/bin/sh
+# System Maintenance Script
+# Usage: su-scheduler add weekly:1:0300 "/sdcard/Documents/su-scheduler/maintenance.sh; : --notify"
+
+echo "Running maintenance..."
+
+# Clear package caches (requires root)
+pm trim-caches 1G 2>/dev/null
+
+# Clear quick temporary files
+find /sdcard -name "*.tmp" -type f -delete 2>/dev/null
+find /sdcard -name "Thumbs.db" -type f -delete 2>/dev/null
+
+echo "Maintenance done."
+EOF
+        
+        echo -e "${BOLD}🎉 Operation complete!${RESET}"
+    else
+        echo -e "${BOLD}💡 Available Actions:${RESET}"
+        echo -e "  ${CYAN}su-scheduler examples restore${RESET}  - Restore missing example scripts to /sdcard/Documents"
+        echo ""
+        echo -e "${BOLD}📝 Included Examples:${RESET}"
+        echo -e "  1. ${YELLOW}backup.sh${RESET}       - Daily backup rotation script"
+        echo -e "  2. ${YELLOW}maintenance.sh${RESET}  - System cleanup utility"
+    fi
+}
+
+# 💀 Kill a running task
+cmd_task_kill() {
+    task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}❌ Provide a task ID.${RESET}"
+        exit 1
+    fi
+    
+    task_dir="$TASKS_DIR/$task_id"
+    pid_file="$task_dir/pid.txt"
+    
+    if [ ! -f "$pid_file" ]; then
+        echo -e "${RED}❌ Task not found: $task_id${RESET}"
+        exit 1
+    fi
+    
+    pid=$(cat "$pid_file")
+    if [ -d "/proc/$pid" ]; then
+        kill -9 "$pid" 2>/dev/null
+        echo -e "${GREEN}💀 Task killed: $task_id (PID: $pid)${RESET}"
+    else
+        echo -e "${YELLOW}Task already terminated: $task_id${RESET}"
+    fi
+}
+
+# 🎮 Attach to interactive shell
+cmd_shell_attach() {
+    task_id="$1"
+    if [ -z "$task_id" ]; then
+        echo -e "${RED}❌ Provide a task ID.${RESET}"
+        exit 1
+    fi
+    
+    shell_out="$SHELLS_DIR/${task_id}.out"
+    
+    if [ ! -f "$shell_out" ]; then
+        echo -e "${RED}❌ No interactive shell found for: $task_id${RESET}"
+        exit 1
+    fi
+    
+    echo -e "${CYAN}${BOLD}🎮 Attaching to shell: $task_id${RESET}"
+    echo -e "${YELLOW}Press Ctrl+C to detach (shell continues running)${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    tail -f "$shell_out"
+}
+
+# 📤 Send command to interactive shell
+cmd_shell_send() {
+    task_id="$1"
+    shift
+    cmd="$*"
+    
+    if [ -z "$task_id" ] || [ -z "$cmd" ]; then
+        echo -e "${RED}❌ Usage: su-scheduler shell-send <task_id> <command>${RESET}"
+        exit 1
+    fi
+    
+    shell_in="$SHELLS_DIR/${task_id}.in"
+    
+    if [ ! -p "$shell_in" ]; then
+        echo -e "${RED}❌ No interactive shell found for: $task_id${RESET}"
+        exit 1
+    fi
+    
+    echo "$cmd" > "$shell_in"
+    echo -e "${GREEN}📤 Command sent to shell: $task_id${RESET}"
+}
+
+# 🔧 Execute command directly
+cmd_exec() {
+    cmd="$*"
+    if [ -z "$cmd" ]; then
+        echo -e "${RED}❌ No command provided.${RESET}"
+        exit 1
+    fi
+    
+    echo -e "${CYAN}${BOLD}🔧 Executing: $cmd${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    eval "$cmd"
+    exit_code=$?
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    echo -e "${BOLD}Exit Code:${RESET} $exit_code"
+}
+
+# 💓 Check if the daemon is alive
+# 💓 Check if the daemon is alive
+cmd_status() {
+    pid=$(pidof su-schedulerd)
+    lock_file="/dev/.su_scheduler.lock"
+    
+    # Fallback: Check lockfile if pidof fails
+    if [ -z "$pid" ] && [ -f "$lock_file" ]; then
+        stored_pid=$(cat "$lock_file")
+        # Check if process with stored PID is actually runnning
+        if [ -n "$stored_pid" ] && [ -e "/proc/$stored_pid" ]; then
+             pid=$stored_pid
+        fi
+    fi
+
+    if [ -n "$pid" ]; then
+        echo -e "${GREEN}${BOLD}💓 Alive!${RESET} Daemon is running smooth (PID: $pid)"
+        return 0
+    else
+        echo -e "${RED}${BOLD}💀 Dead.${RESET} The daemon is currently not running."
+        # Debug hint
+        if [ -f "$lock_file" ]; then
+             echo -e "${YELLOW}(Lockfile exists but process seems dead. Stale lock?)${RESET}"
+        fi
+        return 1
+    fi
+}
+
+# 🛑 Stop the daemon
+# 🛑 Stop the daemon
+cmd_stop() {
+    pid=$(pidof su-schedulerd)
+    lock_file="/dev/.su_scheduler.lock"
+    
+    # Fallback to lockfile PID
+    if [ -z "$pid" ] && [ -f "$lock_file" ]; then
+        pid=$(cat "$lock_file")
+    fi
+
+    if [ -n "$pid" ]; then
+        kill "$pid" 2>/dev/null
+        rm -f "$lock_file"
+        echo -e "${RED}${BOLD}🛑 Halted.${RESET} The daemon has been stopped."
+    else
+        # Force cleanup just in case
+        rm -f "$lock_file"
+        echo -e "${YELLOW}The daemon was already sleeping.${RESET}"
+    fi
+}
+
+# 🔄 Restart the daemon
+cmd_restart() {
+    cmd_stop
+    sleep 1
+    echo -e "${BLUE}${BOLD}🚀 Ignition...${RESET} Restarting engine."
+    nohup "$DAEMON_BINARY" > /dev/null 2>&1 &
+    sleep 1
+    cmd_status
+}
+
+# 🧪 Run System Tests
+cmd_test() {
+    echo -e "${BLUE}${BOLD}🧪 Su Scheduler Test Suite (v$VERSION)${RESET}"
+    
+    local BACKUP_PATH="/sdcard/Documents/su-scheduler/config.backup.$(date +%s)"
+    local TEST_CONFIG_LOCAL="/sdcard/Documents/su-scheduler/test-config.tmp"
+    local TEST_SCRIPT_EXEC="/sdcard/Documents/su-scheduler/test_script_no_exec.sh"
+
+    # Restore function for safety
+    restore_config() {
+        echo -e "\n${YELLOW}⚠️  Interrupt detected! Restoring config...${RESET}"
+        if [ -f "$BACKUP_PATH" ]; then
+            cp "$BACKUP_PATH" "$CONFIG_FILE"
+            echo -e "${GREEN}✅ Config restored.${RESET}"
+            cmd_restart >/dev/null
+        fi
+        rm -f "${TEST_CONFIG_LOCAL}.ready" "$TEST_CONFIG_LOCAL" "$TEST_SCRIPT_EXEC"
+        exit 1
+    }
+    trap restore_config INT TERM
+
+    # 1. Create dummy script
+    echo -e "- Creating dummy script without exec permissions..."
+    echo '#!/system/bin/sh' > "$TEST_SCRIPT_EXEC"
+    echo 'echo "Smart Exec Test Passed" > /sdcard/Documents/su-scheduler/test_smart_exec.log' >> "$TEST_SCRIPT_EXEC"
+    chmod 644 "$TEST_SCRIPT_EXEC"
+
+    # 2. Backup existing config
+    if [ -f "$CONFIG_FILE" ]; then
+        echo -e "- Backing up current config to: ${GREEN}$BACKUP_PATH${RESET}"
+        cp "$CONFIG_FILE" "$BACKUP_PATH"
+    else
+        echo -e "${YELLOW}⚠️ No existing config found at $CONFIG_FILE${RESET}"
+    fi
+
+    # 3. Generate test config
+    echo -e "- Generating test configuration..."
+    # We use unquoted heredoc to expand dates for advanced schedules,
+    # but we escape \$ for the commands so they expand during task execution.
+    cat << CONFIG_END > "$TEST_CONFIG_LOCAL"
+# 🧪 SU SCHEDULER TEST CONFIGURATION
+boot echo "Boot Test Passed: \$(date)" > /sdcard/Documents/su-scheduler/test_boot.log; : --notify --msg="Boot Test"
+PLACEHOLDER_TIME echo "Time Test Passed: \$(date)" > /sdcard/Documents/su-scheduler/test_time.log; : --notify
+boot env > /sdcard/Documents/su-scheduler/test_termux_env.log; : --termux --notify --msg="Termux Env Check"
+boot sh -c 'mkdir -p /sdcard/Documents/su-scheduler/multi_test && echo "Step 1" > /sdcard/Documents/su-scheduler/multi_test/step1.txt && ls -la /sdcard/Documents/su-scheduler/multi_test > /sdcard/Documents/su-scheduler/test_multiline.log && rm -rf /sdcard/Documents/su-scheduler/multi_test'; : --notify --msg="Multiline Test"
+boot $TEST_SCRIPT_EXEC; : --notify --msg="Smart Execution Test"
+weekly:$(date +%u):$(echo $NEXT_TIME | tr -d ':') echo "Weekly Test Passed" > /sdcard/Documents/su-scheduler/test_weekly.log
+boot echo "Delete Test Passed" > /sdcard/Documents/su-scheduler/test_delete.log; : --delete
+boot echo "Notify Start Passed" > /sdcard/Documents/su-scheduler/test_notify_start.log; : --notify-start --msg="Notify Start Test"
+boot echo "Notify End Passed" > /sdcard/Documents/su-scheduler/test_notify_end.log; : --notify-end --msg="Notify End Test"
+boot uname -a > /sdcard/Documents/su-scheduler/test_termux_uname.log; : --termux --msg="Termux Uname Test"
+boot ls \$PREFIX/bin | head -n 20 > /sdcard/Documents/su-scheduler/test_termux_pkg.log; : --termux --msg="Termux Bin Check"
+# Interactive test - should be able to run a command and captured
+boot ls /system/bin > /sdcard/Documents/su-scheduler/test_interactive.log; : --interactive --msg="Interactive Test"
+CONFIG_END
+
+    # 4. Prepare Time Test (Schedule +2 mins for reliable testing)
+    CUR_HH=$(date +%H)
+    CUR_MM=$(date +%M)
+    # Strip leading zeros
+    CUR_MM=${CUR_MM#0}; CUR_HH=${CUR_HH#0}
+    
+    NEXT_MM=$((CUR_MM + 2))
+    if [ $NEXT_MM -ge 60 ]; then NEXT_MM=$((NEXT_MM - 60)); CUR_HH=$((CUR_HH + 1)); fi
+    # Handle midnight rollover (24 -> 00)
+    if [ $CUR_HH -ge 24 ]; then CUR_HH=0; fi
+    
+    NEXT_MM=$(printf "%02d" $NEXT_MM); CUR_HH=$(printf "%02d" $CUR_HH)
+    NEXT_TIME="${CUR_HH}:${NEXT_MM}"
+
+    echo -e "- Scheduling time test for: ${GREEN}$NEXT_TIME${RESET} (current: $(date +%H:%M))"
+    sed "s/PLACEHOLDER_TIME/$NEXT_TIME/g" "$TEST_CONFIG_LOCAL" > "${TEST_CONFIG_LOCAL}.ready"
+
+    # 5. Install Test Config
+    echo -e "- Installing test configuration..."
+    cp "${TEST_CONFIG_LOCAL}.ready" "$CONFIG_FILE"
+
+    # 6. Restart Daemon
+    echo -e "- Restarting daemon..."
+    cmd_restart > /dev/null
+    sleep 2
+
+    # 7. Monitoring Loop (300 seconds for comprehensive testing)
+    echo -e "${BLUE}👀 Watching logs for 300 seconds...${RESET}"
+    echo "---------------------------------------------------"
+    cmd_log -f &
+    LOG_PID=$!
+
+    for i in $(seq 300 -1 1); do
+        printf "\r⏳ Waiting for tests... %3ds remaining" "$i"
+        sleep 1
+    done
+    echo -e "\rTime's up! Stopping log watcher.         "
+    kill $LOG_PID 2>/dev/null
+
+    echo "---------------------------------------------------"
+    echo -e "${BLUE}📊 Verifying Results...${RESET}"
+
+    verify_file() {
+        if [ -f "$1" ]; then
+            echo -e "[${GREEN}PASS${RESET}] $2 found: $1"
+            rm "$1"
+        else
+            echo -e "[${RED}FAIL${RESET}] $2 MISSING: $1"
+        fi
+    }
+
+    verify_file "/sdcard/Documents/su-scheduler/test_boot.log" "Boot Task"
+    verify_file "/sdcard/Documents/su-scheduler/test_termux_env.log" "Termux Env"
+    verify_file "/sdcard/Documents/su-scheduler/test_multiline.log" "Multiline Block"
+    verify_file "/sdcard/Documents/su-scheduler/test_smart_exec.log" "Smart Execution"
+    verify_file "/sdcard/Documents/su-scheduler/test_delete.log" "Delete Modifier"
+    verify_file "/sdcard/Documents/su-scheduler/test_notify_start.log" "Notify Start"
+    verify_file "/sdcard/Documents/su-scheduler/test_notify_end.log" "Notify End"
+    verify_file "/sdcard/Documents/su-scheduler/test_termux_uname.log" "Termux Uname"
+    verify_file "/sdcard/Documents/su-scheduler/test_termux_pkg.log" "Termux Binaries"
+    verify_file "/sdcard/Documents/su-scheduler/test_interactive.log" "Interactive Task"
+    verify_file "/sdcard/Documents/su-scheduler/test_weekly.log" "Weekly Task"
+
+    if [ -f "/sdcard/Documents/su-scheduler/test_time.log" ]; then
+         echo -e "[${GREEN}PASS${RESET}] Time Task Executed"
+         rm "/sdcard/Documents/su-scheduler/test_time.log"
+    else
+         echo -e "[${YELLOW}WAIT${RESET}] Time task might still be pending ($NEXT_TIME)"
+         # Final check: wait 60 more seconds as requested
+         echo -e "- Waiting extra 60 seconds as requested..."
+         sleep 60
+         if [ -f "/sdcard/Documents/su-scheduler/test_time.log" ]; then
+             echo -e "[${GREEN}PASS${RESET}] Time Task Executed (after extra wait)"
+             rm "/sdcard/Documents/su-scheduler/test_time.log"
+         else
+             echo -e "[${RED}FAIL${RESET}] Time Task MISSING after final wait"
+         fi
+    fi
+
+    # 8. Restore Config
+    echo -e "- Restoring original configuration..."
+    if [ -f "$BACKUP_PATH" ]; then
+        cp "$BACKUP_PATH" "$CONFIG_FILE"
+        echo -e "${GREEN}✅ Config restored.${RESET}"
+        cmd_restart >/dev/null
+    else
+        echo -e "${RED}❌ Backup not found! Check $BACKUP_PATH${RESET}"
+    fi
+
+    rm -f "${TEST_CONFIG_LOCAL}.ready" "$TEST_CONFIG_LOCAL" "$TEST_SCRIPT_EXEC"
+    echo -e "${BLUE}🧪 Test run complete.${RESET}"
+}
+
+# 📚 Show documentation
+cmd_help() {
+    local section="$1"
+    local pager=""
+    local docs_file="/system/bin/.su-scheduler-docs"
+    
+    # Check if docs file exists
+    if [ ! -f "$docs_file" ]; then
+        echo -e "${RED}❌ Documentation file not found.${RESET}"
+        echo -e "${YELLOW}Please reinstall the module.${RESET}"
+        return 1
+    fi
+    
+    # Determine pager to use
+    # Priority: bat > less > cat
+    if command -v bat >/dev/null 2>&1; then
+        pager="bat --style=auto --paging=always"
+    elif [ -f "/data/data/com.termux/files/usr/bin/bat" ]; then
+        pager="/data/data/com.termux/files/usr/bin/bat --style=auto --paging=always"
+    elif command -v less >/dev/null 2>&1; then
+        pager="less -R"
+    elif [ -x "/system/bin/less" ]; then
+        pager="/system/bin/less -R"
+    else
+        pager="cat"
+    fi
+    
+    # Filter by section if requested
+    case "$section" in
+        --interactive|interactive)
+            echo -e "${CYAN}${BOLD}📖 Showing Interactive Shell Guide...${RESET}"
+            sed -n '/# 🎮 Interactive Shell Guide/,/# 🐧 Termux Integration Guide/p' "$docs_file" | $pager
+            ;;
+        --termux|termux)
+            echo -e "${CYAN}${BOLD}📖 Showing Termux Integration Guide...${RESET}"
+            sed -n '/# 🐧 Termux Integration Guide/,/# 📅 Su Scheduler - Advanced/p' "$docs_file" | $pager
+            ;;
+        --scheduling|scheduling)
+            echo -e "${CYAN}${BOLD}📖 Showing Scheduling Reference...${RESET}"
+            sed -n '/# 📅 Su Scheduler - Advanced/,$p' "$docs_file" | $pager
+            ;;
+        --bat)
+            # Force bat
+            if command -v bat >/dev/null 2>&1; then
+                bat --style=auto --paging=always "$docs_file"
+            elif [ -f "/data/data/com.termux/files/usr/bin/bat" ]; then
+                /data/data/com.termux/files/usr/bin/bat --style=auto --paging=always "$docs_file"
+            else
+                echo -e "${RED}❌ bat not found. Install with: pkg install bat${RESET}"
+                return 1
+            fi
+            ;;
+        --less)
+            # Force less
+            if command -v less >/dev/null 2>&1; then
+                less -R "$docs_file"
+            elif [ -x "/system/bin/less" ]; then
+                /system/bin/less -R "$docs_file"
+            else
+                echo -e "${RED}❌ less not found.${RESET}"
+                cat "$docs_file"
+            fi
+            ;;
+        *)
+            # Show full documentation
+            echo -e "${CYAN}${BOLD}📖 Su Scheduler - Complete Documentation${RESET}"
+            echo -e "${YELLOW}Using pager: $(echo $pager | awk '{print $1}')${RESET}"
+            echo ""
+            $pager "$docs_file"
+            ;;
+    esac
+}
+
+# 🚦 Main Dispatcher - Routes your command to the right function
+case "$1" in
+    add) shift; cmd_add "$@" ;;
+    list|ls) shift; cmd_list "$@" ;;
+    remove|rm) shift; cmd_remove "$@" ;;
+    edit|e) shift; cmd_edit "$@" ;;
+    log) shift; cmd_log "$@" ;;
+    clear-log) echo -n "" > "$LOG_FILE"; echo -e "${GREEN}🧹 Log cleared.${RESET}" ;;
+    tasks) cmd_tasks ;;
+    task-info) shift; cmd_task_info "$@" ;;
+    task-output) shift; cmd_task_output "$@" ;;
+    task-kill) shift; cmd_task_kill "$@" ;;
+    shell-attach) shift; cmd_shell_attach "$@" ;;
+    shell-send) shift; cmd_shell_send "$@" ;;
+    exec) shift; cmd_exec "$@" ;;
+    examples) shift; cmd_examples "$@" ;;
+    test) cmd_test ;;
+    status) cmd_status ;;
+    stop) cmd_stop ;;
+    restart) cmd_restart ;;
+    help|--help|-h|man) shift; cmd_help "$@" ;;
+    *) print_help ;;
+esac

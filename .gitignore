@@ -1,0 +1,18 @@
+# Su Scheduler GitIgnore
+
+# Build Artifacts
+*.zip
+
+# Logs
+*.log
+test_*.log
+
+# Temp Files
+*.tmp
+*.ready
+config.backup.*
+
+# System / IDE
+.DS_Store
+.vscode/
+.idea/

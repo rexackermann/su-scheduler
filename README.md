@@ -1,0 +1,1320 @@
+# 🕒 Su Scheduler 🚀
+
+> **A Modern Automation Powerhouse for Android** ⚡📱
+
+![Status](https://img.shields.io/badge/Status-Stable-brightgreen.svg?style=for-the-badge) ![Root](https://img.shields.io/badge/Root-REQUIRED-red.svg?style=for-the-badge) ![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge) ![Version](https://img.shields.io/badge/Version-1.3.2-blue.svg?style=for-the-badge)
+
+---
+
+## 🌟 Overview
+
+**Su Scheduler** is a premium, systemless automation tool for Android power users. It allows you to schedule scripts and commands with precision, offering advanced features like process isolation, interactive shells, and native Termux integration.
+
+**📍 Configuration File:** `/sdcard/Documents/su-scheduler/config.txt`
+**📂 Data Directory:** `/data/adb/su-scheduler/`
+
+---
+
+## 📋 Requirements
+
+- **Root Access**: Magisk, KernelSU, or APatch.
+- **BusyBox**: Recommended for full shell command compatibility.
+- **Termux**: Required only if using the `: --termux` modifier.
+
+---
+
+## 💎 Key Features
+
+-   **Systemless Design**: Fully compatible with Magisk/KernelSU modules ecosystem.
+-   **Advanced Scheduling**:
+    -   **Boot**: Run on device startup (`boot`).
+    -   **Time**: Minute-precision daily schedules (`HH:MM`).
+    -   **Weekly/Monthly/Yearly**: Complex recurring schedules.
+-   **Process Isolation**: Every task runs in its own isolated process.
+-   **Interactive Shells**: Persistent shell sessions you can attach to live 🎮.
+-   **Termux Integration**: Native execution within the Termux environment 🐧.
+-   **Smart Execution**: Automatically fixes script permissions and handles interpreters.
+-   **Hot Reload**: Edit config and changes apply instantly.
+-   **Notifications**: Integrated Android notifications for task status.
+
+### 📅 Advanced Scheduling Formats
+
+-   `weekly:DAY:HHMM` → Every week on specified day (1=Mon, 7=Sun)
+    - Example: `weekly:1:0800` = Every Monday at 8 AM
+-   `nweekly:N:DAY:HHMM` → Every N weeks on specified day
+    - Example: `nweekly:2:5:1400` = Every 2 weeks on Friday at 2 PM
+-   `monthly:DD:HHMM` → Every month on specified day
+    - Example: `monthly:15:1200` = 15th of every month at noon
+-   `nmonthly:N:DD:HHMM` → Every N months on specified day
+    - Example: `nmonthly:3:01:0900` = Every 3 months on the 1st at 9 AM
+-   `yearly:MM:DD:HHMM` → Once per year on specified date
+    - Example: `yearly:01:01:0000` = New Year's Day at midnight
+
+### 🧠 Intelligent Script Execution
+
+When you schedule a script file (e.g., `/sdcard/myscript.sh`), Su Scheduler automatically:
+
+1. **Detects** if the command is a script file
+2. **Fixes permissions** with `chmod +x` if needed
+3. **Attempts multiple execution methods** if direct execution fails:
+   - Direct execution (`./script`)
+   - Bash execution (`bash script`)
+   - Shell execution (`sh script`)
+   - Source execution (`. script`)
+
+This means you can schedule scripts without worrying about execute permissions!
+
+### 🎯 Advanced Modifiers
+
+-   `: --delete` → Run once and self-destruct. 💥
+-   `: --boot` → Run on time AND on every boot. 👯‍♂️
+-   `: --notify` → Notify on start & completion 📢
+-   `: --notify-start` → Notify only when starting 🚀
+-   `: --notify-end` → Notify only when complete ✅
+-   `: --msg="text"` → Custom notification message 💬
+-   `: --interactive` → Run in interactive shell mode 🎮
+-   `: --termux` → Execute in Termux environment 🐧
+
+---
+
+## 🎮 Command Your Destiny
+
+Use the `su-scheduler` command in your favorite terminal (Termux, etc.) to manage your tasks.
+
+### 📋 Core Commands
+
+| Command | Action |
+| :--- | :--- |
+| `add <trigger> <cmd>` | Add a new mission 📝 |
+| `list [pattern]` | Show your scheduled tasks 🧐 |
+| `remove <num\|pattern>` | Nuke a task 💥 |
+| `edit [editor]` | Open the config in your editor 🎨 |
+| `log [-f\|-n NUM]` | View logs (follow or last N lines) 🕵️ |
+| `status` | Check the daemon pulse 💓 |
+| `restart` | Restart the daemon 🔄 |
+| `stop` | Stop the daemon 💀 |
+
+### 🔧 Task Management
+
+| Command | Action |
+| :--- | :--- |
+| `tasks` | List all running tasks 📋 |
+| `task-info <id>` | Get detailed task information 🔍 |
+| `task-output <id>` | View task output 📄 |
+| `task-kill <id>` | Terminate a task 💀 |
+| `exec <command>` | Execute command directly 🔧 |
+
+### 🎮 Interactive Shell
+
+| Command | Action |
+| :--- | :--- |
+| `shell-attach <id>` | Attach to interactive shell 🎮 |
+| `shell-send <id> <cmd>` | Send command to shell 📤 |
+
+---
+
+## 💖 Configuration
+
+*File Location:* `/sdcard/Documents/su-scheduler/config.txt` 📂
+
+You can edit this file directly or use `su-scheduler add/edit`.
+
+```bash
+# 🏁 Run on Boot
+boot touch /sdcard/boot_success.txt
+
+# 🌙 Night mode at 10 PM with notification
+22:00 settings put system screen_brightness 10; : --notify-end
+
+# ☀️ Morning routine with custom message
+06:00 settings put system screen_brightness 255; : --boot --msg="Good Morning!"
+
+# 💥 One-time reboot with notification
+14:30 reboot; : --delete --notify
+
+# 🎮 Interactive shell session
+boot sh; : --interactive
+
+# 📢 Notify on both start and completion
+08:00 logcat -c; : --notify --msg="Clearing logs"
+
+# 🧠 Smart script execution (auto-fixes permissions!)
+14:30 /storage/emulated/0/myscript.sh; : --notify
+
+# 📜 Multiline code block (heredoc syntax)
+boot sh <<EOF; : --notify
+echo "Starting backup"
+cd /sdcard
+tar -czf backup-$(date +%Y%m%d).tar.gz Documents/
+echo "Backup complete"
+EOF
+```
+
+---
+
+## 🛠️ Installation
+
+1.  Download the `su-scheduler-v1.0.0.zip`.
+2.  Install via Magisk App, KernelSU App, or APatch.
+3.  Reboot.
+4.  Open terminal and type `su-scheduler` to start commanding!
+
+---
+
+## 📖 Usage Examples
+
+### Basic Scheduling
+```bash
+# Add a boot task
+su-scheduler add boot "echo 'System booted' > /sdcard/boot.log"
+
+# Schedule a time-based task
+su-scheduler add 23:30 reboot
+
+# Add with notification
+su-scheduler add 08:00 "logcat -c; : --notify"
+
+# Schedule a script (permissions auto-fixed!)
+su-scheduler add 14:30 "/sdcard/backup.sh; : --notify-end"
+```
+
+### Smart Script Execution
+```bash
+# Even if dd has no execute permission, it will be fixed automatically!
+su-scheduler add 14:30 "/storage/emulated/0/dd"
+
+# The daemon will:
+# 1. Detect it's a script file
+# 2. Try chmod +x /storage/emulated/0/dd
+# 3. Attempt direct execution
+# 4. If that fails, try: bash /storage/emulated/0/dd
+# 5. If that fails, try: sh /storage/emulated/0/dd
+# 6. If that fails, try: . /storage/emulated/0/dd
+```
+
+### Task Management
+```bash
+# List all running tasks
+su-scheduler tasks
+
+# Get task details
+su-scheduler task-info boot_1_1673634567
+
+# View task output
+su-scheduler task-output time_0800_1_1673634890
+
+# Kill a task
+su-scheduler task-kill boot_1_1673634567
+```
+
+### Direct Execution
+```bash
+# Execute a command immediately
+su-scheduler exec "pm list packages | grep google"
+
+# Run with full shell features
+su-scheduler exec 'for i in 1 2 3; do echo $i; done'
+```
+
+### 🧪 System Health Check
+Verify your installation and configuration with the built-in test suite:
+```bash
+su-scheduler test
+```
+*This safely backs up your config, runs a suite of tests (Boot, Time, Termux, Multiline, etc.), and restores everything automatically.*
+
+### 🎮 Interactive Shell Sessions
+
+Interactive shells let you run persistent sessions and interact with them in real-time.
+
+```bash
+# 1. Start an interactive shell on boot (recommended)
+su-scheduler add boot "sh; : --interactive"
+
+# 2. Find your shell's task ID
+su-scheduler tasks
+# Output shows: Task ID: boot_1_1705167890
+
+# 3. Connect to the shell (view live output)
+su-scheduler shell-attach boot_1_1705167890
+# Press Ctrl+C to detach (shell keeps running)
+
+# 4. Send commands to the shell
+su-scheduler shell-send boot_1_1705167890 "ls -la /sdcard"
+su-scheduler shell-send boot_1_1705167890 "cd /data && pwd"
+
+# 5. View shell output
+su-scheduler task-output boot_1_1705167890
+
+# Interactive shell in Termux environment
+su-scheduler add boot "sh; : --interactive --termux"
+```
+
+**Why use interactive shells?**
+- 🔍 Debug scripts in real-time
+- 📊 Monitor long-running processes
+- 🎯 Send commands on-demand
+- 🔧 Test code interactively
+
+**See [Interactive Shell Guide](#-interactive-shell-guide---su-scheduler) below for complete documentation.**
+
+### Viewing Logs
+```bash
+# View last 20 log entries (colored)
+su-scheduler log
+
+# Follow logs in real-time
+su-scheduler log -f
+
+# View last 50 entries
+su-scheduler log -n 50
+```
+
+### 🐧 Termux Environment Execution
+```bash
+# Run Python script in Termux environment
+su-scheduler add 09:00 "python /sdcard/script.py; : --termux --notify"
+
+# Use Termux packages (pkg, apt, etc.)
+su-scheduler add boot "pkg update && pkg upgrade -y; : --termux"
+
+# Execute Node.js script
+su-scheduler add weekly:1:1000 "node /sdcard/backup.js; : --termux --notify-end"
+
+# Use Termux utilities
+su-scheduler add 08:00 "termux-battery-status > /sdcard/battery.log; : --termux"
+
+# The --termux modifier:
+# - Sets up full Termux environment (PATH, LD_LIBRARY_PATH, etc.)
+# - Handles User 0 decryption automatically
+# - Uses Termux's preferred shell (zsh/bash)
+# - Enables access to all Termux packages and tools
+```
+
+### 📜 Multiline Code Blocks
+
+Execute complex scripts using heredoc syntax (`<<EOF`):
+
+```bash
+# Edit your config file
+su-scheduler edit
+
+# Add multiline task
+boot sh <<EOF; : --notify --msg="Backup Complete"
+echo "Starting daily backup..."
+cd /sdcard
+
+# Create backup directory
+mkdir -p Backups/$(date +%Y%m%d)
+
+# Backup important files
+tar -czf Backups/$(date +%Y%m%d)/documents.tar.gz Documents/
+tar -czf Backups/$(date +%Y%m%d)/pictures.tar.gz DCIM/
+
+# Clean old backups (older than 30 days)
+find Backups/ -type f -mtime +30 -delete
+
+echo "Backup complete!"
+EOF
+
+# Multiline with Termux
+08:00 python <<EOF; : --termux --notify
+import os
+import datetime
+
+print(f"Running at {datetime.datetime.now()}")
+os.system("pkg update")
+print("Update complete")
+EOF
+
+# Complex shell script
+weekly:1:0900 sh <<EOF; : --notify
+#!/system/bin/sh
+# Weekly maintenance script
+
+echo "=== Weekly Maintenance ==="
+echo "Date: $(date)"
+
+# Clear caches
+echo "Clearing caches..."
+find /sdcard -name ".cache" -type d -exec rm -rf {} + 2>/dev/null
+
+# Update logs
+echo "Rotating logs..."
+logcat -c
+
+# System info
+echo "Disk usage:"
+df -h | grep /sdcard
+
+echo "=== Maintenance Complete ==="
+EOF
+```
+
+**Benefits of multiline blocks:**
+- ✅ Write complex scripts directly in config
+- ✅ No need for separate script files
+- ✅ Easy to edit and maintain
+- ✅ Supports any language (sh, python, etc.)
+- ✅ Works with all modifiers
+
+---
+
+## 🎨 Features Showcase
+
+### 🔥 Hot Config Reload
+Edit your config file and changes are detected instantly - no daemon restart needed!
+
+### 📢 Smart Notifications
+Get Android notifications when tasks start, complete, or fail. Customize messages for each task.
+
+### 🎮 Interactive Shell Mode
+Run persistent shell sessions and interact with them live - perfect for monitoring or debugging.
+
+### 🌈 Beautiful Logging
+All events are logged with timestamps and color coding for easy reading and debugging.
+
+### 🔒 Process Isolation
+Each task runs in its own isolated process with lockfiles - one task can't block another.
+
+### 🧠 Intelligent Execution
+Automatically detects scripts, fixes permissions, and tries multiple execution methods until one succeeds!
+
+---
+
+---
+# 🎮 Interactive Shell Guide - Su Scheduler
+
+## What is Interactive Mode?
+
+Interactive mode allows you to run **persistent shell sessions** that stay alive and can be interacted with in real-time. This is perfect for:
+
+- 🔍 **Debugging** - Watch commands execute live
+- 📊 **Monitoring** - Keep long-running processes active
+- 🎯 **Interactive Tasks** - Send commands on-demand
+- 🔧 **Development** - Test scripts interactively
+
+---
+
+## Quick Start
+
+### 1. Start an Interactive Shell
+
+```bash
+# Start on boot (recommended)
+su-scheduler add boot "sh; : --interactive"
+
+# Start at specific time
+su-scheduler add 09:00 "sh; : --interactive"
+
+# Start in Termux environment
+su-scheduler add boot "sh; : --interactive --termux"
+```
+
+### 2. Find Your Shell's Task ID
+
+```bash
+su-scheduler tasks
+```
+
+Output:
+```
+📋 Active Tasks:
+------------------------------------------------------------
+Task ID: boot_1_1705167890
+  Status: RUNNING | PID: 12345
+  Command: sh
+
+Task ID: boot_2_1705167891
+  Status: RUNNING | PID: 12346
+  Command: python server.py
+------------------------------------------------------------
+```
+
+### 3. Connect to the Shell
+
+```bash
+# Attach to see live output
+su-scheduler shell-attach boot_1_1705167890
+```
+
+**Press Ctrl+C to detach** (shell continues running)
+
+### 4. Send Commands
+
+```bash
+# Send a single command
+su-scheduler shell-send boot_1_1705167890 "ls -la /sdcard"
+
+# Send multiple commands
+su-scheduler shell-send boot_1_1705167890 "cd /sdcard && pwd"
+
+# Run a script
+su-scheduler shell-send boot_1_1705167890 "./backup.sh"
+```
+
+---
+
+## Detailed Usage
+
+### Starting Interactive Shells
+
+#### Basic Shell
+```bash
+# System shell (sh)
+su-scheduler add boot "sh; : --interactive"
+
+# Bash shell
+su-scheduler add boot "bash; : --interactive"
+```
+
+#### Termux Shell
+```bash
+# Termux environment (uses zsh/bash from Termux)
+su-scheduler add boot "sh; : --interactive --termux"
+
+# With notification
+su-scheduler add boot "sh; : --interactive --termux --notify --msg='Termux Shell Ready'"
+```
+
+#### Scheduled Interactive Sessions
+```bash
+# Start at 9 AM daily
+su-scheduler add 09:00 "sh; : --interactive"
+
+# Weekly on Monday
+su-scheduler add weekly:1:0900 "sh; : --interactive"
+```
+
+### Finding Active Shells
+
+```bash
+# List all running tasks
+su-scheduler tasks
+
+# Filter for interactive shells
+su-scheduler tasks | grep "sh"
+
+# Get detailed info
+su-scheduler task-info boot_1_1705167890
+```
+
+Output:
+```
+🔍 Task Information: boot_1_1705167890
+============================================================
+Command: sh
+Status: RUNNING
+PID: 12345
+Started: 2026-01-13 23:00:00
+============================================================
+```
+
+### Connecting to Shells
+
+#### Method 1: Attach (View Live Output)
+
+```bash
+su-scheduler shell-attach boot_1_1705167890
+```
+
+**What you'll see:**
+- Real-time output from the shell
+- All commands executed
+- Any errors or messages
+
+**To detach:**
+- Press `Ctrl+C` (shell keeps running)
+
+#### Method 2: Send Commands
+
+```bash
+# Basic command
+su-scheduler shell-send boot_1_1705167890 "echo 'Hello World'"
+
+# Change directory and list
+su-scheduler shell-send boot_1_1705167890 "cd /sdcard && ls -la"
+
+# Run a script
+su-scheduler shell-send boot_1_1705167890 "/sdcard/backup.sh"
+
+# Pipe commands
+su-scheduler shell-send boot_1_1705167890 "ps -ef | grep su-scheduler"
+```
+
+### Viewing Shell Output
+
+```bash
+# View output file directly
+su-scheduler task-output boot_1_1705167890
+
+# Or use cat
+cat /data/adb/su-scheduler/shells/boot_1_1705167890.out
+
+# Follow output in real-time
+tail -f /data/adb/su-scheduler/shells/boot_1_1705167890.out
+```
+
+---
+
+## Advanced Examples
+
+### Python Development Server
+
+```bash
+# Start Python server
+su-scheduler add boot "python -m http.server 8000; : --interactive --termux"
+
+# Send commands to it
+su-scheduler shell-send <task_id> "print('Server running')"
+```
+
+### Node.js REPL
+
+```bash
+# Start Node REPL
+su-scheduler add boot "node; : --interactive --termux"
+
+# Send JavaScript
+su-scheduler shell-send <task_id> "console.log('Hello from Node')"
+su-scheduler shell-send <task_id> "process.version"
+```
+
+### Database Shell
+
+```bash
+# SQLite shell
+su-scheduler add boot "sqlite3 /sdcard/mydb.db; : --interactive --termux"
+
+# Send SQL queries
+su-scheduler shell-send <task_id> "SELECT * FROM users;"
+su-scheduler shell-send <task_id> ".tables"
+```
+
+### Monitoring Script
+
+```bash
+# Start monitoring
+su-scheduler add boot "sh; : --interactive"
+
+# Send monitoring commands
+su-scheduler shell-send <task_id> "while true; do date; free -h; sleep 60; done"
+```
+
+### Git Operations
+
+```bash
+# Start in git repo
+su-scheduler add boot "cd ~/projects && sh; : --interactive --termux"
+
+# Send git commands
+su-scheduler shell-send <task_id> "git status"
+su-scheduler shell-send <task_id> "git pull"
+su-scheduler shell-send <task_id> "git log -n 5"
+```
+
+---
+
+## Multiline Code Blocks
+
+You can execute multiline scripts using heredoc syntax:
+
+### In Config File
+
+```bash
+# Edit config
+su-scheduler edit
+
+# Add multiline task
+boot sh <<EOF; : --interactive
+echo "Starting multi-line script"
+cd /sdcard
+for i in 1 2 3; do
+    echo "Processing $i"
+    sleep 1
+done
+echo "Complete"
+EOF
+```
+
+### Via CLI (Alternative)
+
+```bash
+# Create a script file first
+cat > /sdcard/multi.sh << 'SCRIPT'
+#!/system/bin/sh
+echo "Line 1"
+echo "Line 2"
+echo "Line 3"
+SCRIPT
+
+# Then schedule it
+su-scheduler add boot "/sdcard/multi.sh; : --interactive"
+```
+
+---
+
+## File Locations
+
+### Shell I/O Files
+
+```bash
+# Input FIFO (send commands here)
+/data/adb/su-scheduler/shells/<task_id>.in
+
+# Output file (read output here)
+/data/adb/su-scheduler/shells/<task_id>.out
+
+# Example
+echo "ls -la" > /data/adb/su-scheduler/shells/boot_1_1705167890.in
+cat /data/adb/su-scheduler/shells/boot_1_1705167890.out
+```
+
+### Task Metadata
+
+```bash
+# Task directory
+/data/adb/su-scheduler/tasks/<task_id>/
+
+# Files:
+- command.txt      # Original command
+- pid.txt          # Process ID
+- status.txt       # Current status
+- start_time.txt   # When it started
+- exec_mode.txt    # SYSTEM or TERMUX
+```
+
+---
+
+## Common Workflows
+
+### Workflow 1: Debug a Script
+
+```bash
+# 1. Start interactive shell
+su-scheduler add boot "sh; : --interactive"
+
+# 2. Get task ID
+TASK_ID=$(su-scheduler tasks | grep "sh" | awk '{print $3}')
+
+# 3. Send your script
+su-scheduler shell-send $TASK_ID "/sdcard/debug-me.sh"
+
+# 4. Watch output
+su-scheduler shell-attach $TASK_ID
+```
+
+### Workflow 2: Remote Monitoring
+
+```bash
+# 1. Start monitoring shell on boot
+su-scheduler add boot "sh; : --interactive --notify --msg='Monitor Ready'"
+
+# 2. Later, check system status
+su-scheduler shell-send <task_id> "top -n 1"
+su-scheduler shell-send <task_id> "df -h"
+su-scheduler shell-send <task_id> "free -h"
+
+# 3. View results
+su-scheduler task-output <task_id>
+```
+
+### Workflow 3: Scheduled Maintenance
+
+```bash
+# 1. Start shell at 3 AM
+su-scheduler add 03:00 "sh; : --interactive"
+
+# 2. Send maintenance commands
+su-scheduler shell-send <task_id> "find /sdcard/Download -mtime +30 -delete"
+su-scheduler shell-send <task_id> "logcat -c"
+su-scheduler shell-send <task_id> "sync"
+
+# 3. Check results in the morning
+su-scheduler log
+```
+
+---
+
+## Troubleshooting
+
+### Shell Not Responding
+
+**Check if it's running:**
+```bash
+su-scheduler tasks
+su-scheduler task-info <task_id>
+```
+
+**Check the PID:**
+```bash
+ps -ef | grep <pid>
+```
+
+### Can't Connect
+
+**Verify FIFO files exist:**
+```bash
+ls -la /data/adb/su-scheduler/shells/
+```
+
+**Check permissions:**
+```bash
+ls -la /data/adb/su-scheduler/shells/<task_id>.*
+```
+
+### No Output
+
+**Check output file:**
+```bash
+cat /data/adb/su-scheduler/shells/<task_id>.out
+```
+
+**Send a test command:**
+```bash
+su-scheduler shell-send <task_id> "echo 'test'"
+sleep 1
+su-scheduler task-output <task_id>
+```
+
+### Shell Died
+
+**Check logs:**
+```bash
+su-scheduler log | grep <task_id>
+```
+
+**Restart it:**
+```bash
+su-scheduler add boot "sh; : --interactive"
+```
+
+---
+
+## Best Practices
+
+### 1. Always Use Boot Tasks for Persistent Shells
+
+```bash
+# Good - survives reboots
+su-scheduler add boot "sh; : --interactive"
+
+# Bad - dies after one run
+su-scheduler add 09:00 "sh; : --interactive"
+```
+
+### 2. Use Notifications
+
+```bash
+su-scheduler add boot "sh; : --interactive --notify --msg='Shell Ready'"
+```
+
+### 3. Name Your Shells (via comments)
+
+```bash
+# Edit config
+su-scheduler edit
+
+# Add comment above
+# Main monitoring shell
+boot sh; : --interactive
+```
+
+### 4. Monitor Output
+
+```bash
+# Set up a monitoring task
+su-scheduler add boot "tail -f /data/adb/su-scheduler/shells/boot_1_*.out > /sdcard/shell-monitor.log; : --interactive"
+```
+
+### 5. Clean Up Old Shells
+
+```bash
+# Kill old shells
+su-scheduler task-kill <old_task_id>
+
+# Remove old FIFO files
+rm /data/adb/su-scheduler/shells/<old_task_id>.*
+```
+
+---
+
+## Quick Reference
+
+| Action | Command |
+|--------|---------|
+| Start shell | `su-scheduler add boot "sh; : --interactive"` |
+| List shells | `su-scheduler tasks` |
+| Connect | `su-scheduler shell-attach <task_id>` |
+| Send command | `su-scheduler shell-send <task_id> "<cmd>"` |
+| View output | `su-scheduler task-output <task_id>` |
+| Kill shell | `su-scheduler task-kill <task_id>` |
+| Check status | `su-scheduler task-info <task_id>` |
+
+---
+
+## Summary
+
+Interactive shells in Su Scheduler provide:
+
+✅ **Persistent Sessions** - Shells that survive and stay running
+✅ **Real-time Interaction** - Send commands anytime
+✅ **Live Monitoring** - Watch output as it happens
+✅ **Termux Support** - Full Termux environment available
+✅ **Multiline Support** - Execute complex scripts
+✅ **Easy Management** - Simple CLI commands
+
+Perfect for debugging, monitoring, and interactive automation! 🎮🚀
+# 🐧 Termux Integration Guide - Su Scheduler
+
+## Overview
+
+Su Scheduler now supports **full Termux environment execution**, allowing you to run Termux packages, scripts, and utilities as scheduled tasks with complete environment setup.
+
+## Features
+
+### ✅ What's Included
+
+- **Full Environment Setup**: PATH, LD_LIBRARY_PATH, PREFIX, HOME, etc.
+- **User 0 Decryption**: Automatic handling of FBE (File-Based Encryption)
+- **Shell Detection**: Automatically uses your configured Termux shell (zsh/bash/sh)
+- **Package Access**: Full access to all Termux packages and utilities
+- **Seamless Integration**: Works with all Su Scheduler features (notifications, scheduling, etc.)
+
+### 🔧 How It Works
+
+When you use the `: --termux` modifier, Su Scheduler:
+
+1. **Validates Termux Installation**
+   - Checks if Termux is installed at `/data/data/com.termux`
+   - Verifies accessibility of Termux binaries
+
+2. **Handles User 0 Decryption**
+   - Automatically waits for User 0 to be decrypted
+   - Ensures Termux files are accessible
+
+3. **Sets Up Environment**
+   - Exports all necessary Termux environment variables
+   - Configures PATH to include Termux binaries
+   - Sets up LD_LIBRARY_PATH for Termux libraries
+   - Loads libtermux-exec.so for shebang fixing
+
+4. **Executes Command**
+   - Runs your command in Termux's preferred shell
+   - Full access to Termux packages and utilities
+
+## Usage
+
+### Basic Syntax
+
+```bash
+su-scheduler add <trigger> "<command>; : --termux"
+```
+
+### Examples
+
+#### Python Scripts
+```bash
+# Run Python script daily at 9 AM
+su-scheduler add 09:00 "python /sdcard/backup.py; : --termux --notify"
+
+# Weekly Python data processing
+su-scheduler add weekly:1:0800 "python /sdcard/process_data.py; : --termux"
+```
+
+#### Node.js Scripts
+```bash
+# Daily Node.js task
+su-scheduler add 14:00 "node /sdcard/server-check.js; : --termux --notify-end"
+
+# Monthly Node.js report
+su-scheduler add monthly:01:0900 "node /sdcard/monthly-report.js; : --termux"
+```
+
+#### Termux Utilities
+```bash
+# Battery status logging
+su-scheduler add 08:00 "termux-battery-status > /sdcard/battery.log; : --termux"
+
+# WiFi scanning
+su-scheduler add 12:00 "termux-wifi-scaninfo > /sdcard/wifi.log; : --termux"
+
+# Location tracking
+su-scheduler add 18:00 "termux-location > /sdcard/location.log; : --termux"
+```
+
+#### Package Management
+```bash
+# Auto-update Termux packages on boot
+su-scheduler add boot "pkg update && pkg upgrade -y; : --termux --notify"
+
+# Weekly package cleanup
+su-scheduler add weekly:7:2300 "pkg autoclean; : --termux"
+```
+
+#### Git Operations
+```bash
+# Daily git pull
+su-scheduler add 06:00 "cd ~/projects && git pull; : --termux --notify"
+
+# Weekly backup to git
+su-scheduler add weekly:7:2200 "cd ~/backup && git add . && git commit -m 'Auto backup' && git push; : --termux"
+```
+
+#### Cron-like Tasks
+```bash
+# Run custom backup script
+su-scheduler add 03:00 "~/bin/backup.sh; : --termux --notify-end"
+
+# Database maintenance
+su-scheduler add monthly:01:0200 "~/scripts/db-maintenance.sh; : --termux"
+```
+
+## Environment Variables
+
+When `: --termux` is used, the following environment is set up:
+
+```bash
+PREFIX="/data/data/com.termux/files/usr"
+HOME="/data/data/com.termux/files/home"
+TMPDIR="/data/data/com.termux/files/usr/tmp"
+SHELL="/data/data/com.termux/files/usr/bin/zsh"  # or bash/sh
+USER="u0_aXXXX"  # Termux user
+LOGNAME="u0_aXXXX"
+TERM="xterm-256color"
+COLORTERM="truecolor"
+LANG="en_US.UTF-8"
+LD_PRELOAD="/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+PATH="/data/data/com.termux/files/usr/bin:..."
+LD_LIBRARY_PATH="/data/data/com.termux/files/usr/lib:..."
+```
+
+## Troubleshooting
+
+### Task Fails with "User 0 locked"
+
+**Problem**: The device is encrypted and User 0 hasn't been decrypted yet.
+
+**Solution**: 
+- Ensure device is unlocked before the task runs
+- For boot tasks, add a delay: `boot sleep 60 && <command>; : --termux`
+
+### Task Fails with "Termux not installed"
+
+**Problem**: Termux is not installed or not accessible.
+
+**Solution**:
+- Install Termux from F-Droid or GitHub
+- Ensure Termux has been opened at least once
+- Check permissions: `ls -la /data/data/com.termux`
+
+### Command Not Found
+
+**Problem**: Termux package not installed.
+
+**Solution**:
+```bash
+# Install the package first
+su-scheduler exec "pkg install python; : --termux"
+
+# Then schedule your task
+su-scheduler add 09:00 "python script.py; : --termux"
+```
+
+### Permission Denied
+
+**Problem**: Script doesn't have execute permission.
+
+**Solution**:
+Su Scheduler automatically fixes this, but you can also:
+```bash
+chmod +x /sdcard/script.sh
+```
+
+## Combining with Other Modifiers
+
+```bash
+# Termux + Notification + Delete (one-time)
+su-scheduler add 15:00 "python /sdcard/setup.py; : --termux --notify --delete"
+
+# Termux + Boot + Custom Message
+su-scheduler add boot "pkg update; : --termux --notify --msg='Packages Updated'"
+
+# Termux + Weekly + Notification
+su-scheduler add weekly:1:0900 "node backup.js; : --termux --notify-end"
+```
+
+## Best Practices
+
+1. **Test Commands First**
+   ```bash
+   # Test in Termux first
+   termux
+   python /sdcard/script.py
+   
+   # Then schedule
+   su-scheduler add 09:00 "python /sdcard/script.py; : --termux"
+   ```
+
+2. **Use Absolute Paths**
+   ```bash
+   # Good
+   su-scheduler add 09:00 "/data/data/com.termux/files/home/script.sh; : --termux"
+   
+   # Also good (~ expands in Termux)
+   su-scheduler add 09:00 "~/script.sh; : --termux"
+   ```
+
+3. **Handle Errors**
+   ```bash
+   # Add error handling
+   su-scheduler add 09:00 "python script.py || echo 'Failed' > /sdcard/error.log; : --termux"
+   ```
+
+4. **Use Notifications**
+   ```bash
+   # Always notify for important tasks
+   su-scheduler add 03:00 "~/backup.sh; : --termux --notify"
+   ```
+
+## Monitoring
+
+```bash
+# View task output
+su-scheduler task-output <task_id>
+
+# Check logs
+su-scheduler log -f
+
+# View task info
+su-scheduler task-info <task_id>
+```
+
+## Advanced: Interactive Termux Shell
+
+```bash
+# Start interactive Termux shell on boot
+su-scheduler add boot "sh; : --termux --interactive"
+
+# Attach to it later
+su-scheduler shell-attach boot_1_1673634567
+
+# Send commands
+su-scheduler shell-send boot_1_1673634567 "python script.py"
+```
+
+## Limitations
+
+- Requires Termux to be installed
+- Requires User 0 to be decrypted (device unlocked)
+- Some Termux-specific features may not work (e.g., termux-api requiring foreground service)
+- GUI apps won't work (terminal only)
+
+## Summary
+
+The `: --termux` modifier transforms Su Scheduler into a powerful automation tool for Termux users, enabling:
+
+- ✅ Scheduled Python/Node.js/Ruby scripts
+- ✅ Automated package management
+- ✅ Git operations
+- ✅ Data processing tasks
+- ✅ System monitoring
+- ✅ Backup automation
+- ✅ And much more!
+
+All with the full power of Termux's ecosystem at your fingertips! 🐧🚀
+# 📅 Su Scheduler - Advanced Scheduling Quick Reference
+
+## 🎯 Trigger Formats
+
+### Basic Triggers
+| Format | Description | Example |
+|--------|-------------|---------|
+| `boot` | Run on every boot | `boot echo "Booted"` |
+| `HHMM` | Daily at time | `0830 backup.sh` |
+| `HH:MM` | Daily at time (alt) | `08:30 backup.sh` |
+
+### Advanced Triggers
+
+#### Weekly Schedule
+```bash
+weekly:DAY:HHMM
+```
+- **DAY**: 1=Monday, 2=Tuesday, ..., 7=Sunday
+- **Examples**:
+  - `weekly:1:0800` - Every Monday at 8 AM
+  - `weekly:5:1700` - Every Friday at 5 PM
+  - `weekly:7:2200` - Every Sunday at 10 PM
+
+#### N-Weekly Schedule (Every N Weeks)
+```bash
+nweekly:N:DAY:HHMM
+```
+- **N**: Number of weeks between executions
+- **Examples**:
+  - `nweekly:2:1:0900` - Every 2 weeks on Monday at 9 AM
+  - `nweekly:4:3:1400` - Every 4 weeks on Wednesday at 2 PM
+
+#### Monthly Schedule
+```bash
+monthly:DD:HHMM
+```
+- **DD**: Day of month (01-31)
+- **Examples**:
+  - `monthly:01:0000` - 1st of every month at midnight
+  - `monthly:15:1200` - 15th of every month at noon
+  - `monthly:28:2300` - 28th of every month at 11 PM
+
+#### N-Monthly Schedule (Every N Months)
+```bash
+nmonthly:N:DD:HHMM
+```
+- **N**: Number of months between executions
+- **Examples**:
+  - `nmonthly:3:01:0900` - Every 3 months on the 1st at 9 AM (Quarterly)
+  - `nmonthly:6:15:1200` - Every 6 months on the 15th at noon (Bi-annually)
+
+#### Yearly Schedule
+```bash
+yearly:MM:DD:HHMM
+```
+- **MM**: Month (01-12)
+- **DD**: Day (01-31)
+- **Examples**:
+  - `yearly:01:01:0000` - New Year's Day at midnight
+  - `yearly:12:25:0800` - Christmas Day at 8 AM
+  - `yearly:07:04:1200` - July 4th at noon
+
+## 🎨 Modifiers
+
+| Modifier | Description |
+|----------|-------------|
+| `: --delete` | Run once and remove from schedule |
+| `: --boot` | Also run on boot (for time-based tasks) |
+| `: --notify` | Send notification on start AND completion |
+| `: --notify-start` | Send notification only on start |
+| `: --notify-end` | Send notification only on completion |
+| `: --msg="text"` | Custom notification message |
+| `: --interactive` | Run in interactive shell mode |
+
+## 📝 Complete Examples
+
+### Daily Tasks
+```bash
+# Clear logs every day at 8 AM
+su-scheduler add 08:00 "logcat -c; : --notify"
+
+# Reboot daily at 3 AM
+su-scheduler add 03:00 "reboot; : --notify-start"
+```
+
+### Weekly Tasks
+```bash
+# Weekly backup every Sunday at 11 PM
+su-scheduler add weekly:7:2300 "/sdcard/backup.sh; : --notify"
+
+# Clear cache every Monday at 9 AM
+su-scheduler add weekly:1:0900 "pm clear com.android.chrome; : --notify-end"
+```
+
+### Bi-Weekly Tasks
+```bash
+# System maintenance every 2 weeks on Saturday
+su-scheduler add nweekly:2:6:1000 "/sdcard/maintenance.sh; : --notify"
+```
+
+### Monthly Tasks
+```bash
+# Monthly report on the 1st at midnight
+su-scheduler add monthly:01:0000 "/sdcard/monthly-report.sh; : --notify"
+
+# Cleanup on the 15th of each month
+su-scheduler add monthly:15:0300 "find /sdcard/Download -mtime +30 -delete"
+```
+
+### Quarterly Tasks
+```bash
+# Quarterly backup every 3 months on the 1st
+su-scheduler add nmonthly:3:01:0200 "/sdcard/quarterly-backup.sh; : --notify"
+```
+
+### Yearly Tasks
+```bash
+# New Year celebration
+su-scheduler add yearly:01:01:0000 "echo 'Happy New Year!' > /sdcard/newyear.txt; : --notify --msg='Happy New Year!'"
+
+# Birthday reminder
+su-scheduler add yearly:06:15:0800 "echo 'Birthday today!'; : --notify --msg='Happy Birthday!'"
+```
+
+### Combined Modifiers
+```bash
+# One-time task with notification
+su-scheduler add 14:30 "reboot; : --delete --notify"
+
+# Task that runs on time AND boot
+su-scheduler add 08:00 "settings put global airplane_mode_on 0; : --boot --notify"
+
+# Custom notification message
+su-scheduler add weekly:1:0900 "backup.sh; : --notify --msg='Weekly Backup Complete'"
+```
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+```bash
+# Copy test config and run tests
+./test-scheduler.sh
+```
+
+This will:
+- Backup your current config
+- Install test configuration
+- Test all features (boot, time, weekly, monthly, yearly)
+- Monitor execution for 60 seconds
+- Display results
+
+## 📊 Monitoring
+
+```bash
+# View running tasks
+su-scheduler tasks
+
+# Follow logs in real-time
+su-scheduler log -f
+
+# View task details
+su-scheduler task-info <task_id>
+
+# View task output
+su-scheduler task-output <task_id>
+```
+
+## 🔍 Day of Week Reference
+
+| Number | Day |
+|--------|-----|
+| 1 | Monday |
+| 2 | Tuesday |
+| 3 | Wednesday |
+| 4 | Thursday |
+| 5 | Friday |
+| 6 | Saturday |
+| 7 | Sunday |
+
+## 📅 Month Reference
+
+| Number | Month |
+|--------|-------|
+| 01 | January |
+| 02 | February |
+| 03 | March |
+| 04 | April |
+| 05 | May |
+| 06 | June |
+| 07 | July |
+| 08 | August |
+| 09 | September |
+| 10 | October |
+| 11 | November |
+| 12 | December |

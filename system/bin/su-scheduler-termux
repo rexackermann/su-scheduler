@@ -1,0 +1,171 @@
+#!/system/bin/sh
+# ---------------------------------------------------------------------------------------
+# 🔧 Termux Environment Helper for Su Scheduler
+# ---------------------------------------------------------------------------------------
+# Author: Rex Ackermann
+# Description: Sets up and validates Termux environment for task execution
+# ---------------------------------------------------------------------------------------
+
+# 📂 Termux paths
+TERMUX_PREFIX="/data/data/com.termux/files/usr"
+TERMUX_HOME="/data/data/com.termux/files/home"
+TERMUX_TMPDIR="/data/data/com.termux/files/usr/tmp"
+
+# 🔍 Check if User 0 is decrypted (FBE support)
+check_decryption() {
+    # If the directory is already accessible, we consider it unlocked
+    if [ -d "$TERMUX_PREFIX" ]; then
+        return 0
+    fi
+    # Check system state
+    if dumpsys user 2>/dev/null | grep -A 20 "UserHandle{0" | grep -q "mUserUnlocked=true"; then
+        return 0
+    fi
+    return 1
+}
+
+# 🔓 Ensure User 0 is decrypted
+ensure_decrypted() {
+    if ! check_decryption; then
+        # Wait up to 30 seconds for decryption
+        COUNT=0
+        while [ $COUNT -lt 60 ]; do
+            sleep 0.5
+            if check_decryption; then
+                return 0
+            fi
+            COUNT=$((COUNT + 1))
+        done
+        return 1
+    fi
+    return 0
+}
+
+# ✅ Validate Termux installation
+validate_termux() {
+    if ! ensure_decrypted; then
+        echo "ERROR: User 0 is not decrypted. Cannot access Termux."
+        return 1
+    fi
+    
+    if [ ! -d "$TERMUX_PREFIX" ]; then
+        echo "ERROR: Termux is not installed at $TERMUX_PREFIX"
+        return 1
+    fi
+    
+    if [ ! -x "$TERMUX_PREFIX/bin/bash" ] && [ ! -x "$TERMUX_PREFIX/bin/sh" ]; then
+        echo "ERROR: Cannot access Termux shell binaries"
+        return 1
+    fi
+    
+    return 0
+}
+
+# 🔧 Setup Termux environment
+setup_termux_env() {
+    # Deterministic User Discovery
+    TERMUX_UID=$(stat -c %u "$TERMUX_PREFIX" 2>/dev/null)
+    
+    # Deterministic Shell and Username Lookup
+    TERMUX_USER=""
+    TERMUX_SHELL=""
+    
+    if [ -f "$TERMUX_PREFIX/etc/passwd" ]; then
+        USER_DATA=$(awk -F: -v uid="$TERMUX_UID" '$3 == uid {print $1 ":" $7}' "$TERMUX_PREFIX/etc/passwd")
+        if [ -n "$USER_DATA" ]; then
+            TERMUX_USER="${USER_DATA%:*}"
+            TERMUX_SHELL="${USER_DATA#*:}"
+        fi
+    fi
+    
+    # Official Defaults
+    if [ -z "$TERMUX_USER" ]; then
+        TERMUX_USER="u0_a$(($TERMUX_UID - 10000))"
+    fi
+    
+    if [ -z "$TERMUX_SHELL" ] || [ ! -x "$TERMUX_SHELL" ]; then
+        # Try zsh first, then bash, then sh
+        for s in zsh bash sh; do
+            if [ -x "$TERMUX_PREFIX/bin/$s" ]; then
+                TERMUX_SHELL="$TERMUX_PREFIX/bin/$s"
+                break
+            fi
+        done
+    fi
+    
+    # Export environment variables
+    export PREFIX="$TERMUX_PREFIX"
+    export HOME="$TERMUX_HOME"
+    export TMPDIR="$TERMUX_TMPDIR"
+    export SHELL="$TERMUX_SHELL"
+    export USER="$TERMUX_USER"
+    export LOGNAME="$TERMUX_USER"
+    export TERM="${TERM:-xterm-256color}"
+    export COLORTERM="${COLORTERM:-truecolor}"
+    export LANG="${LANG:-en_US.UTF-8}"
+    
+    # Critical for fixing shebangs and package execution
+    if [ -f "$TERMUX_PREFIX/lib/libtermux-exec.so" ]; then
+        export LD_PRELOAD="$TERMUX_PREFIX/lib/libtermux-exec.so"
+    fi
+    
+    # PATH and Library resolution
+    CLEAN_PATH=$(echo "$PATH" | sed -E "s|$TERMUX_PREFIX/bin:||g; s|:$TERMUX_PREFIX/bin||g")
+    export PATH="$TERMUX_PREFIX/bin:$TERMUX_PREFIX/bin/applets:$CLEAN_PATH"
+    export LD_LIBRARY_PATH="$TERMUX_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+}
+
+# 🚀 Execute command in Termux environment
+exec_in_termux() {
+    local cmd="$1"
+    
+    if ! validate_termux; then
+        return 1
+    fi
+    
+    setup_termux_env
+    
+    # Change to Termux home directory
+    cd "$TERMUX_HOME" || cd /
+    
+    # Execute command in Termux shell
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Termux Dispatch: $TERMUX_SHELL -c \"$cmd\""
+    exec "$TERMUX_SHELL" -c "$cmd"
+}
+
+# 📊 Get Termux status
+get_termux_status() {
+    if ! ensure_decrypted; then
+        echo "LOCKED"
+        return 1
+    fi
+    
+    if ! validate_termux; then
+        echo "NOT_INSTALLED"
+        return 1
+    fi
+    
+    echo "READY"
+    return 0
+}
+
+# Main dispatcher
+case "$1" in
+    validate)
+        validate_termux
+        ;;
+    setup)
+        setup_termux_env
+        ;;
+    exec)
+        shift
+        exec_in_termux "$*"
+        ;;
+    status)
+        get_termux_status
+        ;;
+    *)
+        echo "Usage: $0 {validate|setup|exec|status}"
+        exit 1
+        ;;
+esac

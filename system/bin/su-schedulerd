@@ -1,0 +1,616 @@
+#!/system/bin/sh
+# ---------------------------------------------------------------------------------------
+# 🔥 Su Scheduler Daemon (su-schedulerd) 🔥
+# ---------------------------------------------------------------------------------------
+# Author: Rex Ackermann
+# Description: The background engine that makes magic happen.
+# ---------------------------------------------------------------------------------------
+
+VERSION="1.3.2"
+
+# 🧹 CRITICAL: Clean environment to prevent shell interference
+unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
+export PATH="/system/bin:/system/xbin:/vendor/bin"
+export HOME="/data/local/tmp"
+
+# 🔒 CRITICAL: Change to root directory to avoid inheriting caller's cwd
+cd / || exit 1
+
+# ⚙️ Constants
+DATA_DIR="/data/adb/su-scheduler"           # Where the magic data lives
+CONFIG_FILE="/sdcard/Documents/su-scheduler/config.txt" # Your schedule whispering gallery
+LOG_FILE="$DATA_DIR/su-scheduler.log"              # The diary of everything that happened
+LOCK_FILE="/dev/.su_scheduler.lock"          # Making sure only one ghost is in the machine
+TASKS_DIR="$DATA_DIR/tasks"                  # Where individual task processes live
+SHELLS_DIR="$DATA_DIR/shells"                # Interactive shell session storage
+
+# 🎨 Color codes for beautiful logging
+C_RESET='\033[0m'
+C_RED='\033[38;5;196m'
+C_GREEN='\033[38;5;46m'
+C_BLUE='\033[38;5;39m'
+C_YELLOW='\033[38;5;226m'
+C_MAGENTA='\033[38;5;201m'
+C_CYAN='\033[38;5;51m'
+C_BOLD='\033[1m'
+
+# 🏗️ Ensure our workspace directories exist
+mkdir -p "$TASKS_DIR"
+mkdir -p "$SHELLS_DIR"
+
+# 📝 Function to log events with pretty timestamps and colors
+log_msg() {
+    local level="$1"
+    local message="$2"
+    local timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+    
+    case "$level" in
+        INFO)    color="${C_BLUE}" ;;
+        SUCCESS) color="${C_GREEN}" ;;
+        WARNING) color="${C_YELLOW}" ;;
+        ERROR)   color="${C_RED}" ;;
+        TASK)    color="${C_MAGENTA}" ;;
+        *)       color="${C_CYAN}" ;;
+    esac
+    
+    # Log to file with colors (for cat/tail viewing)
+    echo -e "${color}${C_BOLD}[$timestamp]${C_RESET} ${color}[$level]${C_RESET} $message" >> "$LOG_FILE"
+}
+
+# 📅 Function to check if task should run based on advanced scheduling
+should_run_advanced_schedule() {
+    local trigger="$1"
+    local current_time="$2"
+    local state_file="$DATA_DIR/schedule_state.txt"
+    
+    # Create state file if it doesn't exist
+    [ ! -f "$state_file" ] && touch "$state_file"
+    
+    # Get current date components
+    local current_day=$(date "+%d")        # Day of month (01-31)
+    local current_month=$(date "+%m")      # Month (01-12)
+    local current_year=$(date "+%Y")       # Year
+    local current_dow=$(date "+%u")        # Day of week (1=Monday, 7=Sunday)
+    local current_week=$(date "+%V")       # Week number (01-53)
+    
+    # 📅 Weekly schedule: weekly:DAY:HHMM (e.g., weekly:1:0800 = Monday at 8am)
+    if echo "$trigger" | grep -q "^weekly:"; then
+        local target_dow=$(echo "$trigger" | cut -d: -f2)
+        local target_time=$(echo "$trigger" | cut -d: -f3)
+        
+        if [ "$current_dow" = "$target_dow" ] && [ "$current_time" -ge "$target_time" ]; then
+            # Check if already ran today
+            local state_key="weekly_${target_dow}_${target_time}_${current_year}${current_month}${current_day}"
+            if ! grep -q "^$state_key$" "$state_file"; then
+                echo "$state_key" >> "$state_file"
+                return 0
+            fi
+        fi
+        return 1
+    fi
+    
+    # 📅 N-Weekly schedule: nweekly:N:DAY:HHMM (e.g., nweekly:2:1:0800 = Every 2 weeks on Monday at 8am)
+    if echo "$trigger" | grep -q "^nweekly:"; then
+        local n_weeks=$(echo "$trigger" | cut -d: -f2)
+        local target_dow=$(echo "$trigger" | cut -d: -f3)
+        local target_time=$(echo "$trigger" | cut -d: -f4)
+        
+        if [ "$current_dow" = "$target_dow" ] && [ "$current_time" -ge "$target_time" ]; then
+            local state_key="nweekly_${n_weeks}_${target_dow}_${target_time}"
+            local last_run=$(grep "^${state_key}=" "$state_file" | cut -d= -f2)
+            
+            if [ -z "$last_run" ]; then
+                # First run
+                sed -i "/^${state_key}=/d" "$state_file"
+                echo "${state_key}=${current_week}" >> "$state_file"
+                return 0
+            else
+                # Check if N weeks have passed
+                local weeks_diff=$((current_week - last_run))
+                if [ $weeks_diff -ge $n_weeks ]; then
+                    sed -i "/^${state_key}=/d" "$state_file"
+                    echo "${state_key}=${current_week}" >> "$state_file"
+                    return 0
+                fi
+            fi
+        fi
+        return 1
+    fi
+    
+    # 📅 Monthly schedule: monthly:DD:HHMM (e.g., monthly:15:1200 = 15th of every month at noon)
+    if echo "$trigger" | grep -q "^monthly:"; then
+        local target_day=$(echo "$trigger" | cut -d: -f2)
+        local target_time=$(echo "$trigger" | cut -d: -f3)
+        
+        if [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
+            local state_key="monthly_${target_day}_${target_time}_${current_year}${current_month}"
+            if ! grep -q "^$state_key$" "$state_file"; then
+                echo "$state_key" >> "$state_file"
+                return 0
+            fi
+        fi
+        return 1
+    fi
+    
+    # 📅 N-Monthly schedule: nmonthly:N:DD:HHMM (e.g., nmonthly:3:01:0900 = Every 3 months on 1st at 9am)
+    if echo "$trigger" | grep -q "^nmonthly:"; then
+        local n_months=$(echo "$trigger" | cut -d: -f2)
+        local target_day=$(echo "$trigger" | cut -d: -f3)
+        local target_time=$(echo "$trigger" | cut -d: -f4)
+        
+        if [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
+            local state_key="nmonthly_${n_months}_${target_day}_${target_time}"
+            local last_run=$(grep "^${state_key}=" "$state_file" | cut -d= -f2)
+            
+            if [ -z "$last_run" ]; then
+                # First run
+                sed -i "/^${state_key}=/d" "$state_file"
+                echo "${state_key}=${current_year}${current_month}" >> "$state_file"
+                return 0
+            else
+                # Calculate months difference
+                local last_year=${last_run:0:4}
+                local last_month=${last_run:4:2}
+                local months_diff=$(( (current_year - last_year) * 12 + current_month - last_month ))
+                
+                if [ $months_diff -ge $n_months ]; then
+                    sed -i "/^${state_key}=/d" "$state_file"
+                    echo "${state_key}=${current_year}${current_month}" >> "$state_file"
+                    return 0
+                fi
+            fi
+        fi
+        return 1
+    fi
+    
+    # 📅 Yearly schedule: yearly:MM:DD:HHMM (e.g., yearly:01:01:0000 = New Year at midnight)
+    if echo "$trigger" | grep -q "^yearly:"; then
+        local target_month=$(echo "$trigger" | cut -d: -f2)
+        local target_day=$(echo "$trigger" | cut -d: -f3)
+        local target_time=$(echo "$trigger" | cut -d: -f4)
+        
+        if [ "$current_month" = "$target_month" ] && [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
+            local state_key="yearly_${target_month}_${target_day}_${target_time}_${current_year}"
+            if ! grep -q "^$state_key$" "$state_file"; then
+                echo "$state_key" >> "$state_file"
+                return 0
+            fi
+        fi
+        return 1
+    fi
+    
+    # Not an advanced schedule
+    return 1
+}
+
+# 📢 Function to send Android notifications
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local priority="${3:-0}"  # 0=normal, 1=high
+    
+    # 🧼 Escape single quotes for shell command
+    local title_esc=$(echo "$title" | sed "s/'/'\\\\''/g")
+    local msg_esc=$(echo "$message" | sed "s/'/'\\\\''/g")
+
+    # Try multiple notification methods for compatibility
+    if command -v cmd >/dev/null 2>&1; then
+        # Modern Android notification service (via shell user 2000 for maximum reliability)
+        su -lp 2000 -c "cmd notification post -S bigtext -t '$title_esc' 'su_scheduler_$$' '$msg_esc'" >/dev/null 2>&1
+    fi
+    
+    # Also try termux-notification if available (for Termux users)
+    if command -v termux-notification >/dev/null 2>&1; then
+        termux-notification --title "$title" --content "$message" --priority "$priority" 2>/dev/null
+    fi
+    
+    # Log that we sent a notification
+    log_msg "INFO" "📢 Notification sent: $title - $message"
+}
+
+# 🚀 Function to execute a task in its own isolated process
+execute_task() {
+    local task_id="$1"
+    local cmd_to_run="$2"
+    local notify_start="$3"
+    local notify_end="$4"
+    local custom_msg="$5"
+    local interactive="$6"
+    local use_termux="$7"
+    
+    # Create a unique task directory for this execution
+    local task_dir="$TASKS_DIR/$task_id"
+    mkdir -p "$task_dir"
+    
+    # Create lockfile for this specific task
+    local task_lock="$task_dir/task.lock"
+    echo $$ > "$task_lock"
+    
+    # Task metadata
+    echo "$cmd_to_run" > "$task_dir/command.txt"
+    date "+%Y-%m-%d %H:%M:%S" > "$task_dir/start_time.txt"
+    echo "RUNNING" > "$task_dir/status.txt"
+    
+    # Log execution mode
+    if [ "$use_termux" = "1" ]; then
+        log_msg "TASK" "🐧 Task [$task_id] starting in TERMUX environment: $cmd_to_run"
+        echo "TERMUX" > "$task_dir/exec_mode.txt"
+    else
+        log_msg "TASK" "🚀 Task [$task_id] starting: $cmd_to_run"
+        echo "SYSTEM" > "$task_dir/exec_mode.txt"
+    fi
+    
+    # Send start notification if requested
+    if [ "$notify_start" = "1" ]; then
+        local start_msg="${custom_msg:-Task started}"
+        send_notification "Su Scheduler - Task Started" "$start_msg: $cmd_to_run"
+    fi
+    
+    # Execute the command based on mode
+    if [ "$interactive" = "1" ]; then
+        # 🎮 Interactive mode - Create a named pipe for real-time interaction
+        local shell_fifo="$SHELLS_DIR/${task_id}.fifo"
+        local shell_out="$SHELLS_DIR/${task_id}.out"
+        local shell_in="$SHELLS_DIR/${task_id}.in"
+        
+        # Create FIFOs for bidirectional communication
+        mkfifo "$shell_in" 2>/dev/null || true
+        mkfifo "$shell_fifo" 2>/dev/null || true
+        
+        log_msg "INFO" "🎮 Interactive shell session created: $task_id"
+        log_msg "INFO" "   Input:  $shell_in"
+        log_msg "INFO" "   Output: $shell_out"
+        
+        # Determine shell to use
+        local shell_cmd="sh"
+        if [ "$use_termux" = "1" ]; then
+            # Use Termux shell if available
+            if [ -x "/system/bin/su-scheduler-termux" ]; then
+                shell_cmd="/system/bin/su-scheduler-termux exec sh"
+            fi
+        fi
+        
+        # Run in interactive shell with I/O redirection
+        (
+            $shell_cmd -i < "$shell_in" > "$shell_out" 2>&1 &
+            shell_pid=$!
+            echo "$shell_pid" > "$task_dir/pid.txt"
+            
+            # Send the command to the shell
+            echo "$cmd_to_run" > "$shell_in"
+            
+            wait $shell_pid
+            exit_code=$?
+            echo "$exit_code" > "$task_dir/exit_code.txt"
+        ) &
+    else
+        # 🔧 Standard execution mode
+        (
+            # 🔒 CRITICAL: Ensure subshell runs from root directory
+            cd / || exit 1
+            
+            # 🧹 Clean environment to avoid shell interference (keep essential vars)
+            export PATH="/system/bin:/system/xbin:/vendor/bin"
+            export HOME="/data/local/tmp"
+            unset TERMUX_VERSION TERMUX_APP_PID TERMUX_PREFIX PREFIX
+            
+            # Redirect all errors to log file for debugging
+            exec 2>> "$LOG_FILE"
+            
+            # Debug: Mark subshell entry
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Subshell started for task $task_id" >> "$LOG_FILE"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Command: $cmd_to_run" >> "$LOG_FILE"
+            
+            # 🐧 Check if Termux execution is requested
+            if [ "$use_termux" = "1" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] 🐧 Executing in Termux environment..." >> "$LOG_FILE"
+                
+                # Check if Termux helper is available
+                if [ -x "/system/bin/su-scheduler-termux" ]; then
+                    # Validate Termux installation
+                    termux_status=$(/system/bin/su-scheduler-termux status)
+                    
+                    if [ "$termux_status" = "READY" ]; then
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ Termux environment validated" >> "$LOG_FILE"
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Termux): /system/bin/su-scheduler-termux exec \"$cmd_to_run\"" >> "$LOG_FILE"
+                        /system/bin/su-scheduler-termux exec "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                        exit_code=$?
+                    elif [ "$termux_status" = "LOCKED" ]; then
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ User 0 is locked. Cannot access Termux." >> "$LOG_FILE"
+                        echo "ERROR: User 0 locked" > "$task_dir/output.log"
+                        exit_code=1
+                    else
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ Termux is not installed or accessible" >> "$LOG_FILE"
+                        echo "ERROR: Termux not installed" > "$task_dir/output.log"
+                        exit_code=1
+                    fi
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ Termux helper not found" >> "$LOG_FILE"
+                    echo "ERROR: Termux helper missing" > "$task_dir/output.log"
+                    exit_code=1
+                fi
+            else
+                # 🧠 Smart execution logic
+                first_arg=$(echo "$cmd_to_run" | awk '{print $1}')
+                
+                if [ -f "$first_arg" ]; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] 📜 Detected script file: $first_arg" >> "$LOG_FILE"
+                    
+                    if [ ! -x "$first_arg" ]; then
+                        chmod +x "$first_arg" 2>/dev/null
+                    fi
+                    
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Script): eval \"$cmd_to_run\"" >> "$LOG_FILE"
+                    eval "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    exit_code=$?
+                    
+                    if [ $exit_code -ne 0 ] && ([ $exit_code -eq 126 ] || [ $exit_code -eq 127 ]); then
+                        if command -v bash >/dev/null 2>&1; then
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Bash Fallback): bash \"$first_arg\" ..." >> "$LOG_FILE"
+                            bash "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1
+                            exit_code=$?
+                        fi
+                        
+                        if [ $exit_code -ne 0 ]; then
+                            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Sh Fallback): sh \"$first_arg\" ..." >> "$LOG_FILE"
+                            sh "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1
+                            exit_code=$?
+                        fi
+                    fi
+                else
+                    # Not a file, execute as regular command
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Eval): eval \"$cmd_to_run\"" >> "$LOG_FILE"
+                    eval "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    exit_code=$?
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Command exit code: $exit_code" >> "$LOG_FILE"
+                fi
+            fi
+            
+            echo "$exit_code" > "$task_dir/exit_code.txt"
+            date "+%Y-%m-%d %H:%M:%S" > "$task_dir/end_time.txt"
+            
+            if [ $exit_code -eq 0 ]; then
+                echo "SUCCESS" > "$task_dir/status.txt"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ Task [$task_id] completed successfully (exit: $exit_code)" >> "$LOG_FILE"
+                
+                if [ "$notify_end" = "1" ]; then
+                    local cmd_now_esc=$(echo "$cmd_to_run" | sed "s/'/'\\\\''/g")
+                    su -lp 2000 -c "cmd notification post -S bigtext -t 'Su Scheduler - Task Complete' 'su_scheduler_$$' '✅ $cmd_now_esc'" >/dev/null 2>&1
+                fi
+            else
+                echo "FAILED" > "$task_dir/status.txt"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ Task [$task_id] failed (exit: $exit_code)" >> "$LOG_FILE"
+                local cmd_now_esc=$(echo "$cmd_to_run" | sed "s/'/'\\\\''/g")
+                su -lp 2000 -c "cmd notification post -S bigtext -t 'Su Scheduler - Task Failed' 'su_scheduler_$$' '❌ $cmd_now_esc (exit: $exit_code)'" >/dev/null 2>&1
+            fi
+            
+            rm -f "$task_lock"
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Subshell completed for task $task_id" >> "$LOG_FILE"
+        ) &
+    fi
+    
+    # Store the background process PID
+    echo $! > "$task_dir/pid.txt"
+}
+
+
+# 🔍 Parse task modifiers from config line
+parse_modifiers() {
+    local line="$1"
+    
+    # Initialize flags
+    notify_start=0
+    notify_end=0
+    delete_after=0
+    interactive=0
+    use_termux=0
+    custom_msg=""
+    
+    # Check for --notify-start
+    if echo "$line" | grep -q ": --notify-start"; then
+        notify_start=1
+    fi
+    
+    # Check for --notify-end
+    if echo "$line" | grep -q ": --notify-end"; then
+        notify_end=1
+    fi
+    
+    # Check for --notify (both start and end)
+    if echo "$line" | grep -q ": --notify"; then
+        notify_start=1
+        notify_end=1
+    fi
+    
+    # Check for --delete
+    if echo "$line" | grep -q ": --delete"; then
+        delete_after=1
+    fi
+    
+    # Check for --interactive
+    if echo "$line" | grep -q ": --interactive"; then
+        interactive=1
+    fi
+    
+    # Check for --termux
+    if echo "$line" | grep -q ": --termux"; then
+        use_termux=1
+    fi
+    
+    # Extract custom message if present: --msg="Your message"
+    if echo "$line" | grep -q ": --msg="; then
+        custom_msg=$(echo "$line" | sed -n 's/.*: --msg="\([^"]*\)".*/\1/p')
+    fi
+}
+
+# 🛡️ Single Instance Protection
+# Check multiple times to allow old process to exit during restart
+COUNT=0
+while [ $COUNT -lt 5 ]; do
+    if [ -f "$LOCK_FILE" ]; then
+        PID=$(cat "$LOCK_FILE")
+        if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
+            if [ $COUNT -eq 0 ]; then
+                log_msg "WARNING" "⚠️ Daemon active (PID $PID). Waiting for exit..."
+            fi
+            sleep 1
+            COUNT=$((COUNT + 1))
+            continue
+        fi
+    fi
+    break
+done
+
+# Force cleanup if process is confirmed dead but lock exists
+[ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
+
+# Stake our claim
+echo $$ > "$LOCK_FILE"
+
+log_msg "INFO" "🎬 Su Scheduler Daemon v$VERSION initialized (PID: $$)"
+
+# 🚀 [PHASE 1] Initialization: Processing Startup & Boot Tasks
+if [ -f "$CONFIG_FILE" ]; then
+    log_msg "INFO" "🏁 Startup phase: Executing initialization tasks..."
+    task_counter=0
+    
+    # Open config file on FD 3 to prevent tasks from eating our lines
+    exec 3< "$CONFIG_FILE"
+    while IFS= read -r line <&3 || [ -n "$line" ]; do
+        clean_line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+        
+        case "$clean_line" in
+            \#*) continue ;;
+            "") continue ;;
+        esac
+
+        first_word=$(echo "$clean_line" | awk '{print $1}')
+        
+        # 📜 Heredoc parsing
+        if echo "$clean_line" | grep -q '<<EOF'; then
+            trigger=$(echo "$clean_line" | awk '{print $1}')
+            cmd_start=$(echo "$clean_line" | sed 's/^[^ ]* //' | sed 's/ *<<EOF.*//')
+            
+            multiline_cmd=""
+            while IFS= read -r block_line <&3; do
+                if echo "$block_line" | grep -q '^EOF'; then
+                    break
+                fi
+                multiline_cmd="${multiline_cmd}${block_line}
+"
+            done
+            
+            clean_line="$trigger $cmd_start '$multiline_cmd'; : $(echo "$clean_line" | sed -n 's/.*\(: --[^;]*\).*/\1/p')"
+            first_word="$trigger"
+        fi
+        
+        should_run=0
+        if [ "$first_word" = "boot" ] || echo "$clean_line" | grep -q ": --boot"; then
+            should_run=1
+        fi
+
+        if [ $should_run -eq 1 ]; then
+            parse_modifiers "$clean_line"
+            cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+            
+            task_counter=$((task_counter + 1))
+            task_id="startup_${task_counter}_$(date +%s)"
+            
+            # Redirect stdin from /dev/null to be absolutely safe
+            execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
+            
+            if [ $delete_after -eq 1 ]; then
+                 log_msg "INFO" "🗑️ Startup task complete. Deleting self."
+                 grep -v -F "$line" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+            fi
+        fi
+    done
+    exec 3<&-
+fi
+
+# 🔄 [PHASE 2] The Eternal Pulse (Main Loop)
+# This is where we watch the clock, second by second.
+log_msg "INFO" "💓 Daemon pulse detected. Entering main loop. I'm watching you... in a good way!"
+
+LAST_MTIME=0  # Track the config's "last modified" time for hot reloading
+
+while true; do
+    # ⏰ Get the current time in HHMM format (e.g., 2307)
+    current_time=$(date "+%H%M")
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        # 🔥 HOT CONFIG RELOAD CHECK
+        # We check the file's modification time. If it changed, we log it!
+        CURRENT_MTIME=$(stat -c %Y "$CONFIG_FILE" 2>/dev/null || stat -f %m "$CONFIG_FILE" 2>/dev/null)
+        if [ "$CURRENT_MTIME" -ne "$LAST_MTIME" ]; then
+            log_msg "INFO" "🔥 New configuration detected! Hot reloading presets..."
+            LAST_MTIME=$CURRENT_MTIME
+        fi
+
+        task_counter=0
+        
+        # 🕵️ Scan the schedule using FD 3
+        exec 3< "$CONFIG_FILE"
+        while IFS= read -r line <&3 || [ -n "$line" ]; do
+             clean_line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+             
+             case "$clean_line" in
+                \#*) continue ;;
+                "") continue ;;
+            esac
+            
+            # 📜 Heredoc parsing
+            if echo "$clean_line" | grep -q '<<EOF'; then
+                trigger=$(echo "$clean_line" | awk '{print $1}')
+                cmd_start=$(echo "$clean_line" | sed 's/^[^ ]* //' | sed 's/ *<<EOF.*//')
+                
+                multiline_cmd=""
+                while IFS= read -r block_line <&3; do
+                    if echo "$block_line" | grep -q '^EOF'; then
+                        break
+                    fi
+                    multiline_cmd="${multiline_cmd}${block_line}
+"
+                done
+                
+                clean_line="$trigger $cmd_start '$multiline_cmd'; : $(echo "$clean_line" | sed -n 's/.*\(: --[^;]*\).*/\1/p')"
+            fi
+            
+            # Normalize trigger
+            trigger=$(echo "$clean_line" | awk '{print $1}')
+            trigger_norm=$(echo "$trigger" | sed 's/://g')
+            
+            # 🎯 Check advanced schedules
+            if should_run_advanced_schedule "$trigger" "$current_time"; then
+                log_msg "INFO" "📅 Advanced schedule matched: $trigger"
+                parse_modifiers "$clean_line"
+                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+                task_counter=$((task_counter + 1))
+                task_id="advanced_${task_counter}_$(date +%s)"
+                execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
+                
+                if [ $delete_after -eq 1 ]; then
+                     log_msg "INFO" "💥 Boom. Task deleted."
+                     grep -v -F "$line" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+                fi
+            # 🎯 Check standard time
+            elif [ "$trigger_norm" = "$current_time" ]; then
+                parse_modifiers "$clean_line"
+                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+                task_counter=$((task_counter + 1))
+                task_id="time_${current_time}_${task_counter}_$(date +%s)"
+                execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
+                
+                if [ $delete_after -eq 1 ]; then
+                     log_msg "INFO" "💥 Boom. Task deleted."
+                     grep -v -F "$line" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+                fi
+            fi
+        done
+        exec 3<&-
+    fi
+    
+    # 💤 Nap until the start of the next minute
+    # This keeps us perfectly synced with the system clock!
+    sleep $((60 - $(date +%S)))
+done
