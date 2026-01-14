@@ -1,0 +1,40 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+
+      - name: Run Build Script
+        run: bash build.sh
+
+      - name: Get Build Artifact Name
+        id: get_zip
+        run: |
+          ZIP_FILE=$(ls su-scheduler-v*.zip | head -n 1)
+          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+          echo "Found zf: $ZIP_FILE"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.get_zip.outputs.zip_file }}
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+          body_path: README.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
