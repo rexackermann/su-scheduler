@@ -1,40 +1,63 @@
-name: Build and Release
+name: Auto-Bump & Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+    paths-ignore:
+      - '.github/workflows/**'
+      - 'README.md'
+      - '.gitignore'
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  bump-and-release:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Install dependencies
+      - name: Git Config
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zip
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Run Build Script
+      - name: Bump Version
+        run: bash bump_version.sh
+
+      - name: Get New Version
+        id: vars
+        run: |
+          VERSION=$(grep "version=" module.prop | cut -d= -f2)
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit & Push Version Change
+        run: |
+          git add .
+          git commit -m "chore: bump version to ${{ steps.vars.outputs.tag }} [skip ci]"
+          git push origin main
+
+      - name: Build Module
         run: bash build.sh
 
-      - name: Get Build Artifact Name
-        id: get_zip
-        run: |
-          ZIP_FILE=$(ls su-scheduler-v*.zip | head -n 1)
-          echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
-          echo "Found zf: $ZIP_FILE"
-
-      - name: Create GitHub Release
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.get_zip.outputs.zip_file }}
-          name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
-          body_path: README.md
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: Release ${{ steps.vars.outputs.tag }}
+          files: su-scheduler-*.zip
+          body: |
+            ## Automated Release ${{ steps.vars.outputs.tag }}
+            
+            This release was automatically generated on push to `main`.
+            
+            **Changes in this version:**
+            ${{ github.event.head_commit.message }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
