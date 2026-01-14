@@ -29,7 +29,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump Version
-        run: bash bump_version.sh
+        run: bash bump_version.sh "${{ github.event.head_commit.message }}"
 
       - name: Get New Version
         id: vars

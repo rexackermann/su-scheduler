@@ -34,4 +34,16 @@ sed -i "s/VERSION=\"$CURRENT_VERSION\"/VERSION=\"$NEW_VERSION\"/" system/bin/su-
 # system/bin/su-schedulerd
 sed -i "s/VERSION=\"$CURRENT_VERSION\"/VERSION=\"$NEW_VERSION\"/" system/bin/su-schedulerd
 
+# update.json
+sed -i "s/\"version\": \"v$CURRENT_VERSION\"/\"version\": \"v$NEW_VERSION\"/" update.json
+sed -i "s/\"versionCode\": $VERSION_CODE/\"versionCode\": $NEW_VERSION_CODE/" update.json
+sed -i "s/download\/v$CURRENT_VERSION\/su-scheduler-v$CURRENT_VERSION.zip/download\/v$NEW_VERSION\/su-scheduler-v$NEW_VERSION.zip/" update.json
+
+# Optional: Update changelog in update.json if argument provided
+if [ -n "$1" ]; then
+    # Escape newlines and quotes for JSON
+    CLEAN_CHANGELOG=$(echo "$1" | sed 's/"/\\"/g')
+    sed -i "s/\"changelog\": \".*\"/\"changelog\": \"$CLEAN_CHANGELOG\"/" update.json
+fi
+
 echo "✅ All files updated to v$NEW_VERSION"
