@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.2",
-  "versionCode": 11302,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.2/su-scheduler-v1.3.2.zip",
-  "changelog": "🚀 Stable release v1.3.2\n✅ Hardened scheduling engine\n🐧 Enhanced Termux bridge\n📢 Reliable notifications\n🛠 Fixed test suite",
+  "version": "v1.3.7",
+  "versionCode": 11307,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.7/su-scheduler-v1.3.7.zip",
+  "changelog": "Fully automated release pipeline is now fully operational. \ud83e\udd16",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
