@@ -2,7 +2,7 @@
   "version": "v1.3.2",
   "versionCode": 11302,
   "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.2/su-scheduler-v1.3.2.zip",
-  "changelog": "🚀 Stable release v1.3.2\n✅ Hardened scheduling engine\n🐧 Enhanced Termux bridge\n📢 Reliable notifications\n🛠 Fixed test suite",
+  "changelog": "feat: Add Magisk automatic update support with update.json",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }

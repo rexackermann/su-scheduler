@@ -1,7 +1,7 @@
 id=su-scheduler
 name=Su Scheduler
-version=v1.3.3
-versionCode=11303
+version=v1.3.4
+versionCode=11304
 author=Rex Ackermann
 description=A modern, systemless job scheduler for Android. Supports Magisk, KernelSU, APatch, and Sukisu. Schedule commands on boot or at specific times with ease.
 updateJson=https://raw.githubusercontent.com/rexackermann/su-scheduler/main/update.json
