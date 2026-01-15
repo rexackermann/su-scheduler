@@ -23,20 +23,14 @@ echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] 🛌 Waking up... System boot det
 # ⏳ [Phase 1] The Decryption Watch
 # We wait for the internal storage to be decrypted (FBE unlock).
 # This is verified by the presence of /sdcard/Android.
-limit=300 # Wait up to 5 minutes
-count=0
-while [ $count -lt $limit ]; do
+# We check every 10 seconds indefinitely until ready.
+while true; do
     if [ -d "/sdcard/Android" ]; then
         echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] 🔓 Storage decrypted! Proceeding..." >> "$LOG_FILE"
         break
     fi
-    sleep 1
-    count=$((count + 1))
+    sleep 10
 done
-
-if [ $count -eq $limit ]; then
-    echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] ⚠️ Timeout waiting for decryption. Starting anyway..." >> "$LOG_FILE"
-fi
 
 # A small extra pause for the system to settle
 sleep 5
