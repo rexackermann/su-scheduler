@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.0",
-  "versionCode": 11400,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.0/su-scheduler-v1.4.0.zip",
-  "changelog": "Major Milestone v1.4.0: Hardened scheduling engine, improved Termux bridge, and advanced task monitoring.",
+  "version": "v1.4.1",
+  "versionCode": 11401,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.1/su-scheduler-v1.4.1.zip",
+  "changelog": "\ud83d\ude80 Hardened command extraction logic to fix 'tar' and 'rsync' failures. v1.4.1",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }

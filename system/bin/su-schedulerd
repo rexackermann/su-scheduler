@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.4.0"
+VERSION="1.4.1"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -449,6 +449,24 @@ parse_modifiers() {
     fi
 }
 
+# 🧪 Helper to extract command from config line (strips modifiers)
+extract_command() {
+    local line="$1"
+    # Logic: Preserve everything after the first space (trigger) 
+    # but strip everything starting from the modifier separator ( : --)
+    local raw_cmd=$(echo "$line" | cut -d' ' -f2-)
+    
+    # Robustly strip modifiers: handles " : --", "; : --", etc.
+    # We look for a space followed by an optional semicolon, then a colon, then a space and --
+    echo "$raw_cmd" | sed 's/[ \t]*;*[ \t]*:[ \t]*--.*//'
+}
+    
+    # Extract custom message if present: --msg="Your message"
+    if echo "$line" | grep -q ": --msg="; then
+        custom_msg=$(echo "$line" | sed -n 's/.*: --msg="\([^"]*\)".*/\1/p')
+    fi
+}
+
 # 🛡️ Single Instance Protection
 # Check multiple times to allow old process to exit during restart
 COUNT=0
@@ -517,7 +535,7 @@ if [ -f "$CONFIG_FILE" ]; then
 
         if [ $should_run -eq 1 ]; then
             parse_modifiers "$clean_line"
-            cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+            cmd_to_run=$(extract_command "$clean_line")
             
             task_counter=$((task_counter + 1))
             task_id="startup_${task_counter}_$(date +%s)"
@@ -590,7 +608,7 @@ while true; do
             parse_modifiers "$clean_line"
             if [ "$run_once_now" = "1" ]; then
                 log_msg "INFO" "⚡ Immediate execution triggered: $trigger"
-                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//; s/--run-once-now//; s/  */ /g; s/ :$/ /; s/ : ;/:/')
+                cmd_to_run=$(extract_command "$clean_line")
                 task_counter=$((task_counter + 1))
                 task_id="immediate_${task_counter}_$(date +%s)"
                 execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
@@ -603,10 +621,10 @@ while true; do
             fi
 
             # 🎯 Check advanced schedules
-            if should_run_advanced_schedule "$trigger" "$current_time"; then
+            if should_run_advanced_schedule "$trigger" "$current_time" "$clean_line"; then
                 log_msg "INFO" "📅 Advanced schedule matched: $trigger"
                 parse_modifiers "$clean_line"
-                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+                cmd_to_run=$(extract_command "$clean_line")
                 task_counter=$((task_counter + 1))
                 task_id="advanced_${task_counter}_$(date +%s)"
                 execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
@@ -618,7 +636,7 @@ while true; do
             # 🎯 Check standard time
             elif [ "$trigger_norm" = "$current_time" ]; then
                 parse_modifiers "$clean_line"
-                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//')
+                cmd_to_run=$(extract_command "$clean_line")
                 task_counter=$((task_counter + 1))
                 task_id="time_${current_time}_${task_counter}_$(date +%s)"
                 execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
