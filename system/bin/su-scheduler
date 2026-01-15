@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.6.1"
+VERSION="1.6.2"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -264,6 +264,12 @@ cmd_tasks() {
                     if echo "$task_id" | grep -q "^startup_"; then
                         continue
                     fi
+                    
+                    # 🔍 Master State Verification: Record must say RUNNING
+                    # This prevents stale PIDs from showing up as active tasks
+                    [ ! -f "$task_dir/status.txt" ] && continue
+                    [ "$(cat "$task_dir/status.txt")" != "RUNNING" ] && continue
+                    
                     command="N/A"
                     [ -f "$task_dir/command.txt" ] && command=$(cat "$task_dir/command.txt")
                     

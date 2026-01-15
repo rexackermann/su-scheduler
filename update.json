@@ -1,8 +1,8 @@
 {
-  "version": "v1.6.1",
-  "versionCode": 11601,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.1/su-scheduler-v1.6.1.zip",
-  "changelog": "\ud83d\ude80 Stable PARALLELISM: Re-added collision detection (prevents duplicate runs) without any intrusive killing. Hid startup tasks from 'tasks' list. v1.6.1",
+  "version": "v1.6.2",
+  "versionCode": 11602,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.2/su-scheduler-v1.6.2.zip",
+  "changelog": "\ud83d\ude80 ZOMBIE EXTERMINATION: Every daemon restart now wipes stale 'RUNNING' records. 'tasks' list now double-verifies system PIDs and hidden startup tasks. v1.6.2",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }

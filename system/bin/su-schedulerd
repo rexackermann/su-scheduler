@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.6.1"
+VERSION="1.6.2"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -61,6 +61,7 @@ log_msg() {
 should_run_advanced_schedule() {
     local trigger="$1"
     local current_time="$2"
+    local command_full="$3"
     local state_file="$DATA_DIR/schedule_state.txt"
     
     # Create state file if it doesn't exist
@@ -73,14 +74,17 @@ should_run_advanced_schedule() {
     local current_dow=$(date "+%u")        # Day of week (1=Monday, 7=Sunday)
     local current_week=$(date "+%V")       # Week number (01-53)
     
+    # 🧬 Generate a unique task key based on the command content (MD5)
+    # This ensures that different tasks scheduled at the same time don't conflict
+    local cmd_hash=$(echo "$command_full" | md5sum | cut -d' ' -f1)
+    
     # 📅 Weekly schedule: weekly:DAY:HHMM (e.g., weekly:1:0800 = Monday at 8am)
     if echo "$trigger" | grep -q "^weekly:"; then
         local target_dow=$(echo "$trigger" | cut -d: -f2)
         local target_time=$(echo "$trigger" | cut -d: -f3)
         
         if [ "$current_dow" = "$target_dow" ] && [ "$current_time" -ge "$target_time" ]; then
-            # Check if already ran today
-            local state_key="weekly_${target_dow}_${target_time}_${current_year}${current_month}${current_day}"
+            local state_key="weekly_${target_dow}_${target_time}_${cmd_hash}_${current_year}${current_month}${current_day}"
             if ! grep -q "^$state_key$" "$state_file"; then
                 echo "$state_key" >> "$state_file"
                 return 0
@@ -96,20 +100,17 @@ should_run_advanced_schedule() {
         local target_time=$(echo "$trigger" | cut -d: -f4)
         
         if [ "$current_dow" = "$target_dow" ] && [ "$current_time" -ge "$target_time" ]; then
-            local state_key="nweekly_${n_weeks}_${target_dow}_${target_time}"
+            local state_key="nweekly_${n_weeks}_${target_dow}_${target_time}_${cmd_hash}"
             local last_run=$(grep "^${state_key}=" "$state_file" | cut -d= -f2)
             
             if [ -z "$last_run" ]; then
-                # First run
-                sed -i "/^${state_key}=/d" "$state_file"
+                # First time run
                 echo "${state_key}=${current_week}" >> "$state_file"
                 return 0
             else
-                # Check if N weeks have passed
-                local weeks_diff=$((current_week - last_run))
-                if [ $weeks_diff -ge $n_weeks ]; then
-                    sed -i "/^${state_key}=/d" "$state_file"
-                    echo "${state_key}=${current_week}" >> "$state_file"
+                local weeks_diff=$(( (current_week - last_run + 53) % 53 ))
+                if [ $weeks_diff -ge "$n_weeks" ]; then
+                    sed -i "s/^${state_key}=.*/${state_key}=${current_week}/" "$state_file"
                     return 0
                 fi
             fi
@@ -117,13 +118,13 @@ should_run_advanced_schedule() {
         return 1
     fi
     
-    # 📅 Monthly schedule: monthly:DD:HHMM (e.g., monthly:15:1200 = 15th of every month at noon)
+    # 📅 Monthly schedule: monthly:DAY:HHMM (e.g., monthly:1:0800 = 1st of every month at 8am)
     if echo "$trigger" | grep -q "^monthly:"; then
         local target_day=$(echo "$trigger" | cut -d: -f2)
         local target_time=$(echo "$trigger" | cut -d: -f3)
         
         if [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
-            local state_key="monthly_${target_day}_${target_time}_${current_year}${current_month}"
+            local state_key="monthly_${target_day}_${target_time}_${cmd_hash}_${current_year}${current_month}"
             if ! grep -q "^$state_key$" "$state_file"; then
                 echo "$state_key" >> "$state_file"
                 return 0
@@ -132,30 +133,28 @@ should_run_advanced_schedule() {
         return 1
     fi
     
-    # 📅 N-Monthly schedule: nmonthly:N:DD:HHMM (e.g., nmonthly:3:01:0900 = Every 3 months on 1st at 9am)
+    # 📅 N-Monthly schedule: nmonthly:N:DAY:HHMM
     if echo "$trigger" | grep -q "^nmonthly:"; then
         local n_months=$(echo "$trigger" | cut -d: -f2)
         local target_day=$(echo "$trigger" | cut -d: -f3)
         local target_time=$(echo "$trigger" | cut -d: -f4)
         
         if [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
-            local state_key="nmonthly_${n_months}_${target_day}_${target_time}"
-            local last_run=$(grep "^${state_key}=" "$state_file" | cut -d= -f2)
+            local state_key="nmonthly_${n_months}_${target_day}_${target_time}_${cmd_hash}"
+            local last_run_month=$(grep "^${state_key}=" "$state_file" | cut -d= -f2)
             
-            if [ -z "$last_run" ]; then
-                # First run
-                sed -i "/^${state_key}=/d" "$state_file"
-                echo "${state_key}=${current_year}${current_month}" >> "$state_file"
+            if [ -z "$last_run_month" ]; then
+                echo "${state_key}=${current_month}" >> "$state_file"
                 return 0
             else
-                # Calculate months difference
-                local last_year=${last_run:0:4}
-                local last_month=${last_run:4:2}
-                local months_diff=$(( (current_year - last_year) * 12 + current_month - last_month ))
+                local total_months=$(( (current_year * 12) + current_month ))
+                local last_total=$(( (current_year * 12) + last_run_month ))
+                # Adjustment for year rollover
+                if [ $total_months -lt $last_total ]; then last_total=$(( ( (current_year-1) * 12 ) + last_run_month )); fi
                 
-                if [ $months_diff -ge $n_months ]; then
-                    sed -i "/^${state_key}=/d" "$state_file"
-                    echo "${state_key}=${current_year}${current_month}" >> "$state_file"
+                local months_diff=$(( total_months - last_total ))
+                if [ $months_diff -ge "$n_months" ]; then
+                    sed -i "s/^${state_key}=.*/${state_key}=${current_month}/" "$state_file"
                     return 0
                 fi
             fi
@@ -163,14 +162,14 @@ should_run_advanced_schedule() {
         return 1
     fi
     
-    # 📅 Yearly schedule: yearly:MM:DD:HHMM (e.g., yearly:01:01:0000 = New Year at midnight)
+    # 📅 Yearly schedule: yearly:MMDD:HHMM (e.g., yearly:1225:0800 = Dec 25th at 8am)
     if echo "$trigger" | grep -q "^yearly:"; then
-        local target_month=$(echo "$trigger" | cut -d: -f2)
-        local target_day=$(echo "$trigger" | cut -d: -f3)
-        local target_time=$(echo "$trigger" | cut -d: -f4)
+        local target_date=$(echo "$trigger" | cut -d: -f2)
+        local target_time=$(echo "$trigger" | cut -d: -f3)
+        local current_mmdd="${current_month}${current_day}"
         
-        if [ "$current_month" = "$target_month" ] && [ "$current_day" = "$target_day" ] && [ "$current_time" -ge "$target_time" ]; then
-            local state_key="yearly_${target_month}_${target_day}_${target_time}_${current_year}"
+        if [ "$current_mmdd" = "$target_date" ] && [ "$current_time" -ge "$target_time" ]; then
+            local state_key="yearly_${target_date}_${target_time}_${cmd_hash}_${current_year}"
             if ! grep -q "^$state_key$" "$state_file"; then
                 echo "$state_key" >> "$state_file"
                 return 0
@@ -207,7 +206,6 @@ send_notification() {
     log_msg "INFO" "📢 Notification sent [$tag]: $title - $message"
 }
 
-
 # 🚀 Function to execute a task in its own isolated process
 execute_task() {
     local task_id="$1"
@@ -217,8 +215,8 @@ execute_task() {
     local custom_msg="$5"
     local interactive="$6"
     local use_termux="$7"
+    
     # 🕵️ Collision Detection: Check if an identical command is already in progress
-    # We allow different commands in parallel, but block identical ones to avoid a mess.
     if [ -d "$TASKS_DIR" ]; then
         for active_task in "$TASKS_DIR"/*; do
             if [ -d "$active_task" ] && [ -f "$active_task/status.txt" ] && grep -q "RUNNING" "$active_task/status.txt"; then
@@ -227,10 +225,16 @@ execute_task() {
                     if [ -n "$target_pid" ] && [ -d "/proc/$target_pid" ]; then
                         log_msg "WARNING" "⚠️ Collision! Identical command already running (PID: $target_pid). Skipping task [$task_id]."
                         return 1
+                    else
+                        # 🧹 Stale record found! Update it so it doesn't block future runs.
+                        echo "STALE" > "$active_task/status.txt"
+                        log_msg "INFO" "🧹 Cleared stale run record for: $cmd_to_run"
                     fi
                 fi
             fi
         done
+    fi
+    
     # Create a unique task directory for this execution
     local task_dir="$TASKS_DIR/$task_id"
     mkdir -p "$task_dir"
@@ -429,8 +433,6 @@ parse_modifiers() {
         # Check for --notify-end
         echo "$mods" | grep -q "\-\-notify-end" && notify_end=1
         # Check for --notify (both start and end)
-        # We check for --notify but NOT --notify-start or --notify-end
-        # Or if it's explicitly --notify
         if echo "$mods" | grep -q "\-\-notify" && ! echo "$mods" | grep -E -q "\-\-notify-(start|end)"; then
             notify_start=1
             notify_end=1
@@ -456,7 +458,7 @@ extract_command() {
     # but strip everything starting from the modifier separator ( : --)
     local raw_cmd=$(echo "$line" | cut -d' ' -f2-)
     
-    # Robustly strip modifiers: handles " : --", "; : --", etc.
+    # Robustly strip modifiers: handles " : --", \"; : --\", etc.
     # We look for a space followed by an optional semicolon, then a colon, then a space and --
     echo "$raw_cmd" | sed 's/[ \t]*;*[ \t]*:[ \t]*--.*//'
 }
@@ -481,16 +483,13 @@ done
 # Force cleanup if process is confirmed dead but lock exists
 [ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
 
-# 🧹 Clean slate: Mark any 'orphaned' tasks from previous crashed runs as 'CRASHED'
-# This is safe because it only changes a text file, it DOES NOT kill any processes.
+# 🧹 Clean slate: Mark ALL 'orphaned' tasks from previous runs as 'ZOMBIE_CRASHED'
+# Since this daemon instance just started, it cannot have any truly active tasks yet.
 if [ -d "$TASKS_DIR" ]; then
     for task_dir in "$TASKS_DIR"/*; do
         if [ -d "$task_dir" ] && [ -f "$task_dir/status.txt" ] && grep -q "RUNNING" "$task_dir/status.txt"; then
-            pid=$(cat "$task_dir/pid.txt" 2>/dev/null)
-            if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
-                log_msg "INFO" "🧹 Pruning stale task record: $(basename "$task_dir")"
-                echo "CRASHED" > "$task_dir/status.txt"
-            fi
+             log_msg "INFO" "🧹 Pruning zombie task record: $(basename "$task_dir")"
+             echo "ZOMBIE_CRASHED" > "$task_dir/status.txt"
         fi
     done
 fi
@@ -499,81 +498,42 @@ fi
 echo $$ > "$LOCK_FILE"
 
 log_msg "INFO" "🎬 Su Scheduler Daemon v$VERSION initialized (PID: $$)"
+log_msg "INFO" "🏁 Startup phase: Executing initialization tasks..."
 
-# 🚀 [PHASE 1] Initialization: Processing Startup & Boot Tasks
+# 🎯 Check for BOOT tasks
 if [ -f "$CONFIG_FILE" ]; then
-    log_msg "INFO" "🏁 Startup phase: Executing initialization tasks..."
-    task_counter=0
-    
-    # Open config file on FD 3 to prevent tasks from eating our lines
     exec 3< "$CONFIG_FILE"
     while IFS= read -r line <&3 || [ -n "$line" ]; do
         clean_line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
-        
         case "$clean_line" in
             \#*) continue ;;
             "") continue ;;
         esac
-
-        first_word=$(echo "$clean_line" | awk '{print $1}')
         
-        # 📜 Heredoc parsing
-        if echo "$clean_line" | grep -q '<<EOF'; then
-            trigger=$(echo "$clean_line" | awk '{print $1}')
-            cmd_start=$(echo "$clean_line" | sed 's/^[^ ]* //' | sed 's/ *<<EOF.*//')
-            
-            multiline_cmd=""
-            while IFS= read -r block_line <&3; do
-                if echo "$block_line" | grep -q '^EOF'; then
-                    break
-                fi
-                multiline_cmd="${multiline_cmd}${block_line}
-"
-            done
-            
-            clean_line="$trigger $cmd_start '$multiline_cmd'; : $(echo "$clean_line" | sed -n 's/.*\(: --[^;]*\).*/\1/p')"
-            first_word="$trigger"
-        fi
-        
-        should_run=0
-        if [ "$first_word" = "boot" ] || echo "$clean_line" | grep -q ": --boot"; then
-            should_run=1
-        fi
-
-        if [ $should_run -eq 1 ]; then
+        trigger=$(echo "$clean_line" | awk '{print $1}')
+        if [ "$trigger" = "boot" ]; then
             parse_modifiers "$clean_line"
             cmd_to_run=$(extract_command "$clean_line")
-            
             task_counter=$((task_counter + 1))
             task_id="startup_${task_counter}_$(date +%s)"
-            
-            # Redirect stdin from /dev/null to be absolutely safe
             execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
-            
-            if [ $delete_after -eq 1 ]; then
-                 log_msg "INFO" "🗑️ Startup task complete. Deleting self."
-                 grep -v -F "$line" "$CONFIG_FILE" > "${CONFIG_FILE}.tmp" && mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-            fi
         fi
     done
     exec 3<&-
 fi
 
-# 🔄 [PHASE 2] The Eternal Pulse (Main Loop)
-# This is where we watch the clock, second by second.
 log_msg "INFO" "💓 Daemon pulse detected. Entering main loop. I'm watching you... in a good way!"
 
-LAST_MTIME=0  # Track the config's "last modified" time for hot reloading
+LAST_MTIME=0
 
+# 🔄 Main Event Loop
 while true; do
-    # ⏰ Get the current time in HHMM format (e.g., 2307)
     current_time=$(date "+%H%M")
     
     if [ -f "$CONFIG_FILE" ]; then
-        # 🔥 HOT CONFIG RELOAD CHECK
-        # We check the file's modification time. If it changed, we log it!
-        CURRENT_MTIME=$(stat -c %Y "$CONFIG_FILE" 2>/dev/null || stat -f %m "$CONFIG_FILE" 2>/dev/null)
-        if [ "$CURRENT_MTIME" -ne "$LAST_MTIME" ]; then
+        # Hot reload: Check if config file was modified
+        CURRENT_MTIME=$(ls -l "$CONFIG_FILE" | awk '{print $6$7$8}')
+        if [ "$CURRENT_MTIME" != "$LAST_MTIME" ]; then
             log_msg "INFO" "🔥 New configuration detected! Hot reloading presets..."
             LAST_MTIME=$CURRENT_MTIME
         fi
