@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.5.9"
+VERSION="1.5.10"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -406,45 +406,34 @@ parse_modifiers() {
     run_once_now=0
     custom_msg=""
     
-    # Check for --run-once-now
-    if echo "$line" | grep -q ": --run-once-now"; then
-        run_once_now=1
-    fi
+    # Extract the modifier part (everything after the last ' : ')
+    local mods=$(echo "$line" | sed -n 's/.* : //p')
     
-    # Check for --notify-start
-    if echo "$line" | grep -q ": --notify-start"; then
-        notify_start=1
-    fi
-    
-    # Check for --notify-end
-    if echo "$line" | grep -q ": --notify-end"; then
-        notify_end=1
-    fi
-    
-    # Check for --notify (both start and end)
-    if echo "$line" | grep -q ": --notify"; then
-        notify_start=1
-        notify_end=1
-    fi
-    
-    # Check for --delete
-    if echo "$line" | grep -q ": --delete"; then
-        delete_after=1
-    fi
-    
-    # Check for --interactive
-    if echo "$line" | grep -q ": --interactive"; then
-        interactive=1
-    fi
-    
-    # Check for --termux
-    if echo "$line" | grep -q ": --termux"; then
-        use_termux=1
-    fi
-    
-    # Extract custom message if present: --msg="Your message"
-    if echo "$line" | grep -q ": --msg="; then
-        custom_msg=$(echo "$line" | sed -n 's/.*: --msg="\([^"]*\)".*/\1/p')
+    if [ -n "$mods" ]; then
+        # Check for --run-once-now
+        echo "$mods" | grep -q "\-\-run-once-now" && run_once_now=1
+        # Check for --notify-start
+        echo "$mods" | grep -q "\-\-notify-start" && notify_start=1
+        # Check for --notify-end
+        echo "$mods" | grep -q "\-\-notify-end" && notify_end=1
+        # Check for --notify (both start and end)
+        # We check for --notify but NOT --notify-start or --notify-end
+        # Or if it's explicitly --notify
+        if echo "$mods" | grep -q "\-\-notify" && ! echo "$mods" | grep -E -q "\-\-notify-(start|end)"; then
+            notify_start=1
+            notify_end=1
+        fi
+        # Check for --delete
+        echo "$mods" | grep -q "\-\-delete" && delete_after=1
+        # Check for --interactive
+        echo "$mods" | grep -q "\-\-interactive" && interactive=1
+        # Check for --termux
+        echo "$mods" | grep -q "\-\-termux" && use_termux=1
+        
+        # Extract custom message if present: --msg="Your message"
+        if echo "$mods" | grep -q "\-\-msg="; then
+            custom_msg=$(echo "$mods" | sed -n 's/.*--msg="\([^"]*\)".*/\1/p')
+        fi
     fi
 }
 

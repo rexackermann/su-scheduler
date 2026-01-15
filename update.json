@@ -1,8 +1,8 @@
 {
-  "version": "v1.5.9",
-  "versionCode": 11509,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.9/su-scheduler-v1.5.9.zip",
-  "changelog": "v1.5.9: COMPLETELY DISABLED all child process termination and monitoring logic. Restored pure non-intrusive operation.",
+  "version": "v1.5.10",
+  "versionCode": 11510,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.10/su-scheduler-v1.5.10.zip",
+  "changelog": "\ud83d\ude80 Robust MODIFIER parsing: Flags like --run-once-now are now detected regardless of their order in the config line. v1.6.0",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
