@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.4.9"
+VERSION="1.4.10"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -609,7 +609,8 @@ while true; do
                 # Prune the --run-once-now modifier from the file
                 log_msg "INFO" "✂️ Pruning --run-once-now from config"
                 # We use a unique marker to avoid double-processing during sed
-                sed -i "s/$line/$(echo "$line" | sed 's/--run-once-now//; s/  */ /g; s/ :[ \t]*$//; s/[ \t]*$//')/" "$CONFIG_FILE"
+                new_line=$(echo "$line" | sed "s/--run-once-now//; s/  */ /g; s/ :[ 	]*$//; s/[ 	]*$//")
+                awk -v old="$line" -v new="$new_line" "{if ($0 == old) print new; else print $0}" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
                 continue
             fi
 

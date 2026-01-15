@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.9",
-  "versionCode": 11409,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.9/su-scheduler-v1.4.9.zip",
-  "changelog": "fix: Resolve syntax error in su-schedulerd (final)",
+  "version": "v1.4.10",
+  "versionCode": 11410,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.10/su-scheduler-v1.4.10.zip",
+  "changelog": "\ud83d\ude80 FIXED: Robust pruning logic for commands with special characters (paths/slashes). v1.5.0",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
