@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.3.10"
+VERSION="1.3.12"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -598,12 +598,12 @@ cmd_exec() {
         fi
         
         echo -e "${BLUE}------------------------------------------------------------${RESET}"
-        eval "$final_cmd"
+        sh -c "$final_cmd"
         exit_code=$?
     else
         echo -e "${CYAN}${BOLD}🔧 Executing: $full_line${RESET}"
         echo -e "${BLUE}------------------------------------------------------------${RESET}"
-        eval "$full_line"
+        sh -c "$full_line"
         exit_code=$?
     fi
     

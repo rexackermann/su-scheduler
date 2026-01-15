@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.3.10"
+VERSION="1.3.12"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -340,8 +340,8 @@ execute_task() {
                         chmod +x "$first_arg" 2>/dev/null
                     fi
                     
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Script): eval \"$cmd_to_run\"" >> "$LOG_FILE"
-                    eval "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Script): sh -c \"$cmd_to_run\"" >> "$LOG_FILE"
+                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1
                     exit_code=$?
                     
                     if [ $exit_code -ne 0 ] && ([ $exit_code -eq 126 ] || [ $exit_code -eq 127 ]); then
@@ -359,8 +359,8 @@ execute_task() {
                     fi
                 else
                     # Not a file, execute as regular command
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Eval): eval \"$cmd_to_run\"" >> "$LOG_FILE"
-                    eval "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Shell): sh -c \"$cmd_to_run\"" >> "$LOG_FILE"
+                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1
                     exit_code=$?
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Command exit code: $exit_code" >> "$LOG_FILE"
                 fi
