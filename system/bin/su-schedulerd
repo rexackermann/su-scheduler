@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.4.4"
+VERSION="1.4.5"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -459,12 +459,6 @@ extract_command() {
     # Robustly strip modifiers: handles " : --", "; : --", etc.
     # We look for a space followed by an optional semicolon, then a colon, then a space and --
     echo "$raw_cmd" | sed 's/[ \t]*;*[ \t]*:[ \t]*--.*//'
-}
-    
-    # Extract custom message if present: --msg="Your message"
-    if echo "$line" | grep -q ": --msg="; then
-        custom_msg=$(echo "$line" | sed -n 's/.*: --msg="\([^"]*\)".*/\1/p')
-    fi
 }
 
 # 🛡️ Single Instance Protection

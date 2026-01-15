@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.4",
-  "versionCode": 11404,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.4/su-scheduler-v1.4.4.zip",
-  "changelog": "fix: Resolve syntax error in su-schedulerd",
+  "version": "v1.4.5",
+  "versionCode": 11405,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.5/su-scheduler-v1.4.5.zip",
+  "changelog": "\ud83d\ude80 FIXED: Resolved critical syntax error in su-schedulerd. v1.4.4",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
