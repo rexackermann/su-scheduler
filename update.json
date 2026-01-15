@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.13",
-  "versionCode": 11313,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.13/su-scheduler-v1.3.13.zip",
-  "changelog": "feat: Replace eval with sh -c for hardened command execution",
+  "version": "v1.3.14",
+  "versionCode": 11314,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.14/su-scheduler-v1.3.14.zip",
+  "changelog": "\ud83d\ude80 Fixed advanced task collision bug. Tasks sharing same time now run independently.",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
