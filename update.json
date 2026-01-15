@@ -1,8 +1,8 @@
 {
-  "version": "v1.6.3",
-  "versionCode": 11603,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.3/su-scheduler-v1.6.3.zip",
-  "changelog": "\ud83d\ude80 Pro Visuals: Enhanced 'tasks' list with premium colorcoding, structured borders, and strict comment filtering. v1.6.3",
+  "version": "v1.6.4",
+  "versionCode": 11604,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.4/su-scheduler-v1.6.4.zip",
+  "changelog": "feat: Premium 'tasks' visuals and comment filtering",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
