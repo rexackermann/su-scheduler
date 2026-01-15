@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.5.4"
+VERSION="1.5.5"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -311,15 +311,27 @@ execute_task() {
         
         # Run in interactive shell with I/O redirection
         (
+            DAEMON_PID=$$
             $shell_cmd -i < "$shell_in" > "$shell_out" 2>&1 &
             shell_pid=$!
             echo "$shell_pid" > "$task_dir/pid.txt"
+            
+            # 🕵️ Shadow Watchdog: Kill shell if daemon disappears (kill -9 protection)
+            (
+                while kill -0 $DAEMON_PID 2>/dev/null; do
+                    sleep 3
+                done
+                kill -TERM "$shell_pid" 2>/dev/null
+                (sleep 2; kill -9 "$shell_pid" 2>/dev/null) &
+            ) &
+            WATCHDOG_PID=$!
             
             # Send the command to the shell
             echo "$cmd_to_run" > "$shell_in"
             
             wait $shell_pid
             exit_code=$?
+            kill $WATCHDOG_PID 2>/dev/null
             echo "$exit_code" > "$task_dir/exit_code.txt"
         ) &
     else
@@ -336,6 +348,23 @@ execute_task() {
             # Redirect all errors to log file for debugging
             exec 2>> "$LOG_FILE"
             
+            # 🕵️ Shadow Watchdog: Detect if daemon died (kill -9 protection)
+            DAEMON_PID=$$
+            TASK_PID_FILE="$task_dir/pid.txt"
+            
+            start_watchdog() {
+                local target_pid=$1
+                (
+                    while kill -0 $DAEMON_PID 2>/dev/null; do
+                        sleep 3
+                    done
+                    # Daemon is gone! Stop this task.
+                    kill -TERM "$target_pid" 2>/dev/null
+                    (sleep 2; kill -9 "$target_pid" 2>/dev/null) &
+                ) &
+                echo $!
+            }
+
             # Debug: Mark subshell entry
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Subshell started for task $task_id" >> "$LOG_FILE"
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Command: $cmd_to_run" >> "$LOG_FILE"
@@ -352,8 +381,15 @@ execute_task() {
                     if [ "$termux_status" = "READY" ]; then
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ Termux environment validated" >> "$LOG_FILE"
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Termux): /system/bin/su-scheduler-termux exec \"$cmd_to_run\"" >> "$LOG_FILE"
-                        /system/bin/su-scheduler-termux exec "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                        
+                        /system/bin/su-scheduler-termux exec "$cmd_to_run" > "$task_dir/output.log" 2>&1 &
+                        actual_pid=$!
+                        echo "$actual_pid" > "$TASK_PID_FILE"
+                        
+                        WATCHDOG_PID=$(start_watchdog "$actual_pid")
+                        wait "$actual_pid"
                         exit_code=$?
+                        kill "$WATCHDOG_PID" 2>/dev/null
                     elif [ "$termux_status" = "LOCKED" ]; then
                         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ User 0 is locked. Cannot access Termux." >> "$LOG_FILE"
                         echo "ERROR: User 0 locked" > "$task_dir/output.log"
@@ -380,27 +416,49 @@ execute_task() {
                     fi
                     
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Script): sh -c \"$cmd_to_run\"" >> "$LOG_FILE"
-                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1 &
+                    actual_pid=$!
+                    echo "$actual_pid" > "$TASK_PID_FILE"
+                    
+                    WATCHDOG_PID=$(start_watchdog "$actual_pid")
+                    wait "$actual_pid"
                     exit_code=$?
+                    kill "$WATCHDOG_PID" 2>/dev/null
                     
                     if [ $exit_code -ne 0 ] && ([ $exit_code -eq 126 ] || [ $exit_code -eq 127 ]); then
                         if command -v bash >/dev/null 2>&1; then
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Bash Fallback): bash \"$first_arg\" ..." >> "$LOG_FILE"
-                            bash "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1
+                            bash "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1 &
+                            actual_pid=$!
+                            WATCHDOG_PID=$(start_watchdog "$actual_pid")
+                            wait "$actual_pid"
                             exit_code=$?
+                            kill "$WATCHDOG_PID" 2>/dev/null
                         fi
                         
                         if [ $exit_code -ne 0 ]; then
                             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Sh Fallback): sh \"$first_arg\" ..." >> "$LOG_FILE"
-                            sh "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1
+                            sh "$first_arg" $(echo "$cmd_to_run" | cut -d' ' -f2-) > "$task_dir/output.log" 2>&1 &
+                            actual_pid=$!
+                            WATCHDOG_PID=$(start_watchdog "$actual_pid")
+                            wait "$actual_pid"
                             exit_code=$?
+                            kill "$WATCHDOG_PID" 2>/dev/null
                         fi
                     fi
                 else
                     # Not a file, execute as regular command
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Final Command (Shell): sh -c \"$cmd_to_run\"" >> "$LOG_FILE"
-                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1
+                    
+                    sh -c "$cmd_to_run" > "$task_dir/output.log" 2>&1 &
+                    actual_pid=$!
+                    echo "$actual_pid" > "$TASK_PID_FILE"
+                    
+                    WATCHDOG_PID=$(start_watchdog "$actual_pid")
+                    wait "$actual_pid"
                     exit_code=$?
+                    kill "$WATCHDOG_PID" 2>/dev/null
+                    
                     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DEBUG] Command exit code: $exit_code" >> "$LOG_FILE"
                 fi
             fi
