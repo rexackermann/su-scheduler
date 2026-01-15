@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.4.14"
+VERSION="1.4.15"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -187,25 +187,24 @@ should_run_advanced_schedule() {
 send_notification() {
     local title="$1"
     local message="$2"
-    local priority="${3:-0}"  # 0=normal, 1=high
+    local tag="${3:-su_scheduler_alert}"
+    local priority="${4:-0}"  # 0=normal, 1=high
     
-    # 🧼 Escape single quotes for shell command
-    local title_esc=$(echo "$title" | sed "s/'/'\\\\''/g")
-    local msg_esc=$(echo "$message" | sed "s/'/'\\\\''/g")
-
     # Try multiple notification methods for compatibility
     if command -v cmd >/dev/null 2>&1; then
         # Modern Android notification service (via shell user 2000 for maximum reliability)
-        su -lp 2000 -c "cmd notification post -S bigtext -t '$title_esc' 'su_scheduler_$$' '$msg_esc'" >/dev/null 2>&1
+        # We use environment variables to pass the text to avoid messy shell escaping bugs
+        NOTIF_TITLE="$title" NOTIF_MSG="$message" NOTIF_TAG="$tag" \
+        su -lp 2000 -c 'cmd notification post -S bigtext -t "$NOTIF_TITLE" "$NOTIF_TAG" "$NOTIF_MSG"' >/dev/null 2>&1
     fi
     
     # Also try termux-notification if available (for Termux users)
     if command -v termux-notification >/dev/null 2>&1; then
-        termux-notification --title "$title" --content "$message" --priority "$priority" 2>/dev/null
+        termux-notification --title "$title" --content "$message" --priority "$priority" --id "$tag" 2>/dev/null
     fi
     
     # Log that we sent a notification
-    log_msg "INFO" "📢 Notification sent: $title - $message"
+    log_msg "INFO" "📢 Notification sent [$tag]: $title - $message"
 }
 
 # 🚀 Function to execute a task in its own isolated process
@@ -243,7 +242,7 @@ execute_task() {
     # Send start notification if requested
     if [ "$notify_start" = "1" ]; then
         local start_msg="${custom_msg:-Task started}"
-        send_notification "Su Scheduler - Task Started" "$start_msg: $cmd_to_run"
+        send_notification "Su Scheduler - Task Started" "$start_msg: $cmd_to_run" "su_scheduler_$task_id"
     fi
     
     # Execute the command based on mode
@@ -374,14 +373,12 @@ execute_task() {
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [SUCCESS] ✅ Task [$task_id] completed successfully (exit: $exit_code)" >> "$LOG_FILE"
                 
                 if [ "$notify_end" = "1" ]; then
-                    local cmd_now_esc=$(echo "$cmd_to_run" | sed "s/'/'\\\\''/g")
-                    su -lp 2000 -c "cmd notification post -S bigtext -t 'Su Scheduler - Task Complete' 'su_scheduler_$$' '✅ $cmd_now_esc'" >/dev/null 2>&1
+                    send_notification "Su Scheduler - Task Complete" "✅ $cmd_to_run" "su_scheduler_$task_id"
                 fi
             else
                 echo "FAILED" > "$task_dir/status.txt"
                 echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] ❌ Task [$task_id] failed (exit: $exit_code)" >> "$LOG_FILE"
-                local cmd_now_esc=$(echo "$cmd_to_run" | sed "s/'/'\\\\''/g")
-                su -lp 2000 -c "cmd notification post -S bigtext -t 'Su Scheduler - Task Failed' 'su_scheduler_$$' '❌ $cmd_now_esc (exit: $exit_code)'" >/dev/null 2>&1
+                send_notification "Su Scheduler - Task Failed" "❌ $cmd_to_run (exit: $exit_code)" "su_scheduler_$task_id"
             fi
             
             rm -f "$task_lock"

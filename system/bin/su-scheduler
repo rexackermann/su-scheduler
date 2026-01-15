@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.4.14"
+VERSION="1.4.15"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -30,6 +30,27 @@ MAGENTA='\033[38;5;201m'    # Neon Magenta
 CYAN='\033[38;5;51m'        # Tropical Cyan
 BOLD='\033[1m'              # Thick and Bold
 RESET='\033[0m'             # Back to reality
+
+# 📢 Function to send Android notifications
+send_notification() {
+    local title="$1"
+    local message="$2"
+    local tag="${3:-su_scheduler_alert}"
+    local priority="${4:-0}"  # 0=normal, 1=high
+    
+    # Try multiple notification methods for compatibility
+    if command -v cmd >/dev/null 2>&1; then
+        # Modern Android notification service (via shell user 2000 for maximum reliability)
+        # We use environment variables to pass the text to avoid messy shell escaping bugs
+        NOTIF_TITLE="$title" NOTIF_MSG="$message" NOTIF_TAG="$tag" \
+        su -lp 2000 -c 'cmd notification post -S bigtext -t "$NOTIF_TITLE" "$NOTIF_TAG" "$NOTIF_MSG"' >/dev/null 2>&1
+    fi
+    
+    # Also try termux-notification if available (for Termux users)
+    if command -v termux-notification >/dev/null 2>&1; then
+        termux-notification --title "$title" --content "$message" --priority "$priority" --id "$tag" 2>/dev/null
+    fi
+}
 
 # 🎭 Function to display our gorgeous ASCII banner
 print_banner() {
@@ -623,20 +644,60 @@ cmd_exec() {
         cmd=$(echo "$full_line" | sed 's/ : .*//')
         modifiers=$(echo "$full_line" | sed 's/.* : //')
         
+        # Parse modifiers
+        local notify_start=0
+        local notify_end=0
+        local use_termux=0
+        local custom_msg=""
+        
+        echo "$modifiers" | grep -q "\-\-notify-start" && notify_start=1
+        echo "$modifiers" | grep -q "\-\-notify-end" && notify_end=1
+        if echo "$modifiers" | grep -q "\-\-notify[^ -]"; then # Matches --notify but not --notify-start/end
+             notify_start=1; notify_end=1
+        elif [ "$(echo "$modifiers" | grep -o "\-\-notify" | wc -l)" -eq 1 ] && ! echo "$modifiers" | grep -E -q "\-\-notify-(start|end)"; then
+             notify_start=1; notify_end=1
+        fi
+        # Simpler check for --notify
+        if echo "$modifiers" | grep -E -q " : --notify([[:space:]]|$)"; then notify_start=1; notify_end=1; fi
+        # Actually, let's just be explicit
+        echo "$modifiers" | grep -q "\-\-notify" && {
+            if ! echo "$modifiers" | grep -q "\-\-notify-"; then
+                notify_start=1; notify_end=1
+            fi
+        }
+        
+        echo "$modifiers" | grep -q "\-\-termux" && use_termux=1
+        if echo "$modifiers" | grep -q "\-\-msg="; then
+            custom_msg=$(echo "$modifiers" | sed -n 's/.*--msg="\([^"]*\)".*/\1/p')
+        fi
+
         echo -e "${CYAN}${BOLD}🔧 Executing: ${YELLOW}$cmd${RESET}"
         
         # Build the final command
         final_cmd="$cmd"
         
-        # Handle --termux
-        if echo "$modifiers" | grep -q "\-\-termux"; then
+        if [ $use_termux -eq 1 ]; then
             echo -e "${MAGENTA}🐧 Environment: Termux${RESET}"
             final_cmd="/system/bin/su-scheduler-termux exec \"$cmd\""
         fi
         
+        # Send start notification
+        if [ $notify_start -eq 1 ]; then
+            send_notification "Su Scheduler - Direct Run Started" "${custom_msg:-Running}: $cmd" "su_scheduler_direct_$$"
+        fi
+
         echo -e "${BLUE}------------------------------------------------------------${RESET}"
         sh -c "$final_cmd"
         exit_code=$?
+
+        # Send end notification
+        if [ $notify_end -eq 1 ]; then
+            if [ $exit_code -eq 0 ]; then
+                send_notification "Su Scheduler - Direct Run Complete" "✅ $cmd" "su_scheduler_direct_$$"
+            else
+                send_notification "Su Scheduler - Direct Run Failed" "❌ $cmd (exit: $exit_code)" "su_scheduler_direct_$$"
+            fi
+        fi
     else
         echo -e "${CYAN}${BOLD}🔧 Executing: $full_line${RESET}"
         echo -e "${BLUE}------------------------------------------------------------${RESET}"
