@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.9",
-  "versionCode": 11309,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.9/su-scheduler-v1.3.9.zip",
-  "changelog": "Added --run-once-now and 'run' CLI command with modifier support. \ud83d\ude80",
+  "version": "v1.3.10",
+  "versionCode": 11310,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.10/su-scheduler-v1.3.10.zip",
+  "changelog": "feat: Add --run-once-now and 'run' CLI command with modifier support",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
