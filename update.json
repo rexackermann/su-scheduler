@@ -1,8 +1,8 @@
 {
-  "version": "v1.5.10",
-  "versionCode": 11510,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.10/su-scheduler-v1.5.10.zip",
-  "changelog": "\ud83d\ude80 Robust MODIFIER parsing: Flags like --run-once-now are now detected regardless of their order in the config line. v1.6.0",
+  "version": "v1.5.11",
+  "versionCode": 11511,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.11/su-scheduler-v1.5.11.zip",
+  "changelog": "fix: Robust modifier parsing for complex task entries",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
