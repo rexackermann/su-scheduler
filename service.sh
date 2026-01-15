@@ -20,10 +20,26 @@ LOG_FILE="$DATA_DIR/events.log"
 # 📝 Log the awakening of the service
 echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] 🛌 Waking up... System boot detected." >> "$LOG_FILE"
 
-# ⏳ [Phase 1] The Graceful Pause
-# We wait for the system to settle down so we don't fight for resources
-# during the intensive boot period.
-sleep 20
+# ⏳ [Phase 1] The Decryption Watch
+# We wait for the internal storage to be decrypted (FBE unlock).
+# This is verified by the presence of /sdcard/Android.
+limit=300 # Wait up to 5 minutes
+count=0
+while [ $count -lt $limit ]; do
+    if [ -d "/sdcard/Android" ]; then
+        echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] 🔓 Storage decrypted! Proceeding..." >> "$LOG_FILE"
+        break
+    fi
+    sleep 1
+    count=$((count + 1))
+done
+
+if [ $count -eq $limit ]; then
+    echo "$(date "+%Y-%m-%d %H:%M:%S") - [Service] ⚠️ Timeout waiting for decryption. Starting anyway..." >> "$LOG_FILE"
+fi
+
+# A small extra pause for the system to settle
+sleep 5
 
 # 🚀 [Phase 2] The Ignition
 # We try to start the daemon from the system path (magic mounted) first.
