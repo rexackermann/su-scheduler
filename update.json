@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.15",
-  "versionCode": 11415,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.15/su-scheduler-v1.4.15.zip",
-  "changelog": "\ud83d\ude80 Hardened notification system: Task-unique tags & robust shell escaping for --notify. v1.5.2",
+  "version": "v1.4.16",
+  "versionCode": 11416,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.16/su-scheduler-v1.4.16.zip",
+  "changelog": "fix: Hardened notification system and unique task tags",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
