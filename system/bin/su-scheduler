@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.5.8"
+VERSION="1.5.9"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -750,23 +750,8 @@ cmd_stop() {
 
     if [ -n "$pid" ]; then
         kill "$pid" 2>/dev/null
-        # Give it a moment to clean up children
-        sleep 1
-        found=0
-        for i in $(seq 1 5); do
-            if [ ! -d "/proc/$pid" ]; then
-                found=1
-                break
-            fi
-            sleep 1
-        done
-        
         rm -f "$lock_file"
-        if [ $found -eq 1 ]; then
-            echo -e "${RED}${BOLD}🛑 Halted.${RESET} The daemon and all background tasks have been stopped."
-        else
-            echo -e "${YELLOW}⚠️ Shutdown taking longer than expected.${RESET} Daemon is cleaning up tasks."
-        fi
+        echo -e "${RED}${BOLD}🛑 Halted.${RESET} The daemon has been stopped."
     else
         # Force cleanup just in case
         rm -f "$lock_file"

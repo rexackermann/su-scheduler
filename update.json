@@ -1,8 +1,8 @@
 {
-  "version": "v1.5.8",
-  "versionCode": 11508,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.8/su-scheduler-v1.5.8.zip",
-  "changelog": "v1.5.8: Updated FBE unlock check to poll indefinitely at 10-second intervals for maximum stability.",
+  "version": "v1.5.9",
+  "versionCode": 11509,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.9/su-scheduler-v1.5.9.zip",
+  "changelog": "v1.5.9: COMPLETELY DISABLED all child process termination and monitoring logic. Restored pure non-intrusive operation.",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
