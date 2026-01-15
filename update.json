@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.2",
-  "versionCode": 11402,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.2/su-scheduler-v1.4.2.zip",
-  "changelog": "fix: Hardened command extraction logic to prevent modifier leakage",
+  "version": "v1.4.3",
+  "versionCode": 11403,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.3/su-scheduler-v1.4.3.zip",
+  "changelog": "\ud83d\ude80 Fixed critical syntax error in su-schedulerd. v1.4.2",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
