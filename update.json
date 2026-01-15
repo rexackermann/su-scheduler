@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.13",
-  "versionCode": 11413,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.13/su-scheduler-v1.4.13.zip",
-  "changelog": "\ud83d\ude80 FIXED: Awk syntax error ($0 expansion). v1.5.1",
+  "version": "v1.4.14",
+  "versionCode": 11414,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.14/su-scheduler-v1.4.14.zip",
+  "changelog": "fix: Resolve awk syntax error by using single quotes",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
