@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.15",
-  "versionCode": 11315,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.15/su-scheduler-v1.3.15.zip",
-  "changelog": "fix: Resolve advanced task collision and state tracking bugs",
+  "version": "v1.3.16",
+  "versionCode": 11316,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.16/su-scheduler-v1.3.16.zip",
+  "changelog": "Split 'tasks' command into active 'tasks' and 'history' commands. v1.4.1",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }

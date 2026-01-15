@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.3.15"
+VERSION="1.3.16"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -72,7 +72,8 @@ print_help() {
     echo -e "  ${GREEN}remove${RESET} ${RED}<line|pattern>${RESET}      Nuke an entry 💥"
     echo -e "  ${GREEN}edit${RESET} ${CYAN}[editor]${RESET}             Crack open the config 🎨"
     echo -e "  ${GREEN}log${RESET} ${YELLOW}[-f|-n NUM]${RESET}          View logs (-f=follow, -n=lines) 🕵️"
-    echo -e "  ${GREEN}tasks${RESET}                    List all running tasks 📋"
+    echo -e "  ${GREEN}tasks${RESET}                    List only running tasks 📋"
+    echo -e "  ${GREEN}history | all-tasks${RESET}      List all tasks (running & finished) 📜"
     echo -e "  ${GREEN}task-info${RESET} ${CYAN}<task_id>${RESET}       Get detailed task info 🔍"
     echo -e "  ${GREEN}task-output${RESET} ${CYAN}<task_id>${RESET}     View task output 📄"
     echo -e "  ${GREEN}task-kill${RESET} ${RED}<task_id>${RESET}       Terminate a task 💀"
@@ -222,16 +223,52 @@ cmd_log() {
 }
 
 # 📋 List all running tasks
+# 📋 List ONLY currently running tasks
 cmd_tasks() {
-    echo -e "${BOLD}${CYAN}📋 Active Tasks:${RESET}"
+    echo -e "${BOLD}${CYAN}📋 Active Running Tasks:${RESET}"
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    
+    found_running=0
+    if [ -d "$TASKS_DIR" ]; then
+        for task_dir in "$TASKS_DIR"/*; do
+            if [ -d "$task_dir" ]; then
+                pid="N/A"
+                [ -f "$task_dir/pid.txt" ] && pid=$(cat "$task_dir/pid.txt")
+                
+                # Check if process is still alive
+                if [ "$pid" != "N/A" ] && [ -d "/proc/$pid" ]; then
+                    task_id=$(basename "$task_dir")
+                    command="N/A"
+                    [ -f "$task_dir/command.txt" ] && command=$(cat "$task_dir/command.txt")
+                    
+                    echo -e "${BOLD}Task ID:${RESET} ${CYAN}$task_id${RESET}"
+                    echo -e "  Status: ${GREEN}RUNNING${RESET} | PID: $pid"
+                    echo -e "  Command: ${MAGENTA}$command${RESET}"
+                    echo ""
+                    found_running=1
+                fi
+            fi
+        done
+    fi
+    
+    if [ $found_running -eq 0 ]; then
+        echo -e "${YELLOW}No active tasks currently running.${RESET}"
+    fi
+    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+}
+
+# 📜 List ALL tasks (History)
+cmd_tasks_history() {
+    echo -e "${BOLD}${CYAN}📜 Task Execution History (All Tasks):${RESET}"
     echo -e "${BLUE}------------------------------------------------------------${RESET}"
     
     if [ ! -d "$TASKS_DIR" ] || [ -z "$(ls -A "$TASKS_DIR" 2>/dev/null)" ]; then
-        echo -e "${YELLOW}No active tasks found.${RESET}"
+        echo -e "${YELLOW}No tasks found in history.${RESET}"
         return
     fi
     
-    for task_dir in "$TASKS_DIR"/*; do
+    # Sort by directory creation time (newest first if possible, otherwise alphabetical)
+    for task_dir in $(ls -dt "$TASKS_DIR"/* 2>/dev/null); do
         if [ -d "$task_dir" ]; then
             task_id=$(basename "$task_dir")
             status="UNKNOWN"
@@ -902,6 +939,7 @@ case "$1" in
     log) shift; cmd_log "$@" ;;
     clear-log) echo -n "" > "$LOG_FILE"; echo -e "${GREEN}🧹 Log cleared.${RESET}" ;;
     tasks) cmd_tasks ;;
+    history|all-tasks) cmd_tasks_history ;;
     task-info) shift; cmd_task_info "$@" ;;
     task-output) shift; cmd_task_output "$@" ;;
     task-kill) shift; cmd_task_kill "$@" ;;
