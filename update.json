@@ -1,8 +1,8 @@
 {
-  "version": "v1.3.16",
-  "versionCode": 11316,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.16/su-scheduler-v1.3.16.zip",
-  "changelog": "Split 'tasks' command into active 'tasks' and 'history' commands. v1.4.1",
+  "version": "v1.3.17",
+  "versionCode": 11317,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.3.17/su-scheduler-v1.3.17.zip",
+  "changelog": "feat: Split tasks command into running status and history",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
