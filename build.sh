@@ -3,7 +3,7 @@
 # Author: Rex Ackermann
 
 NAME="su-scheduler"
-VERSION="v1.3.14"
+VERSION="v1.3.15"
 ZIP_NAME="${NAME}-${VERSION}.zip"
 DOCS_FILE="system/bin/.su-scheduler-docs"
 
@@ -19,7 +19,7 @@ cat > "$DOCS_FILE" << 'DOCS_START'
 # 📚 SU SCHEDULER - COMPLETE DOCUMENTATION
 # ═══════════════════════════════════════════════════════════════════════════
 # Author: Rex Ackermann
-# Version: 1.3.14
+# Version: 1.3.15
 # ═══════════════════════════════════════════════════════════════════════════
 
 DOCS_START
