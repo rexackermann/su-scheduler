@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.5.2"
+VERSION="1.5.3"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -207,6 +207,30 @@ send_notification() {
     log_msg "INFO" "📢 Notification sent [$tag]: $title - $message"
 }
 
+# 🧹 Function to clean up all child tasks on exit
+cleanup_children() {
+    log_msg "INFO" "🛑 Termination signal received. Cleaning up children..."
+    if [ -d "$TASKS_DIR" ]; then
+        for task_dir in "$TASKS_DIR"/*; do
+            if [ -d "$task_dir" ]; then
+                pid=$(cat "$task_dir/pid.txt" 2>/dev/null)
+                if [ -n "$pid" ] && [ -d "/proc/$pid" ]; then
+                    log_msg "INFO" "💀 Killing active task $pid ($(basename "$task_dir"))"
+                    kill -TERM "$pid" 2>/dev/null
+                    # Force kill after short delay if still alive
+                    (sleep 1; kill -9 "$pid" 2>/dev/null) &
+                fi
+            fi
+        done
+    fi
+    rm -f "$LOCK_FILE"
+    log_msg "INFO" "👋 Daemon halted. Goodbye!"
+    exit 0
+}
+
+# Set up traps to ensure cleanup on various exit signals
+trap cleanup_children TERM INT HUP QUIT
+
 # 🚀 Function to execute a task in its own isolated process
 execute_task() {
     local task_id="$1"
@@ -216,6 +240,22 @@ execute_task() {
     local custom_msg="$5"
     local interactive="$6"
     local use_termux="$7"
+    
+    # 🕵️ Prevent mission overlap: check if this command is already in progress
+    # We allow different commands in parallel, but block identical ones to avoid a mess.
+    if [ -d "$TASKS_DIR" ]; then
+        for active_task in "$TASKS_DIR"/*; do
+            if [ -d "$active_task" ] && [ -f "$active_task/status.txt" ] && grep -q "RUNNING" "$active_task/status.txt"; then
+                if [ -f "$active_task/command.txt" ] && [ "$(cat "$active_task/command.txt")" = "$cmd_to_run" ]; then
+                    target_pid=$(cat "$active_task/pid.txt" 2>/dev/null)
+                    if [ -n "$target_pid" ] && [ -d "/proc/$target_pid" ]; then
+                        log_msg "WARNING" "⚠️ Collision detected! Command already running (PID: $target_pid). Skipping task [$task_id]."
+                        return 1
+                    fi
+                fi
+            fi
+        done
+    fi
     
     # Create a unique task directory for this execution
     local task_dir="$TASKS_DIR/$task_id"
@@ -477,6 +517,19 @@ done
 
 # Force cleanup if process is confirmed dead but lock exists
 [ -f "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
+
+# 🧹 Clean slate: Mark any 'orphaned' tasks from previous crashed runs as failed/killed
+if [ -d "$TASKS_DIR" ]; then
+    for task_dir in "$TASKS_DIR"/*; do
+        if [ -d "$task_dir" ] && [ -f "$task_dir/status.txt" ] && grep -q "RUNNING" "$task_dir/status.txt"; then
+            pid=$(cat "$task_dir/pid.txt" 2>/dev/null)
+            if [ -z "$pid" ] || [ ! -d "/proc/$pid" ]; then
+                log_msg "INFO" "🧹 Pruning orphaned task $(basename "$task_dir")"
+                echo "CRASHED" > "$task_dir/status.txt"
+            fi
+        fi
+    done
+fi
 
 # Stake our claim
 echo $$ > "$LOCK_FILE"
