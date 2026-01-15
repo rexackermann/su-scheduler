@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.11",
-  "versionCode": 11411,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.11/su-scheduler-v1.4.11.zip",
-  "changelog": "fix: Robust pruning logic for commands with special characters",
+  "version": "v1.4.12",
+  "versionCode": 11412,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.12/su-scheduler-v1.4.12.zip",
+  "changelog": "\ud83d\ude80 FIXED: Awk syntax error ($0 expansion). v1.5.1",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
