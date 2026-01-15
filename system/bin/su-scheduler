@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.3.8"
+VERSION="1.3.9"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -58,6 +58,7 @@ print_help() {
     echo -e "        ${CYAN}nmonthly:N:DD:HHMM${RESET}      Every N months"
     echo -e "        ${CYAN}yearly:MM:DD:HHMM${RESET}       Yearly on MM/DD"
     echo -e "      ${YELLOW}Modifiers:${RESET}"
+    echo -e "        ${CYAN}: --run-once-now${RESET}    Execute immediately then becomes regular ⚡"
     echo -e "        ${CYAN}: --delete${RESET}           Run once and self-destruct 💥"
     echo -e "        ${CYAN}: --boot${RESET}             Also run on every boot 🏁"
     echo -e "        ${CYAN}: --notify${RESET}           Notify on start & completion 📢"
@@ -77,7 +78,7 @@ print_help() {
     echo -e "  ${GREEN}task-kill${RESET} ${RED}<task_id>${RESET}       Terminate a task 💀"
     echo -e "  ${GREEN}shell-attach${RESET} ${CYAN}<task_id>${RESET}    Attach to interactive shell 🎮"
     echo -e "  ${GREEN}shell-send${RESET} ${CYAN}<task_id>${RESET} ${BOLD}<cmd>${RESET} Send command to shell 📤"
-    echo -e "  ${GREEN}exec${RESET} ${BOLD}<command>${RESET}            Execute command directly 🔧"
+    echo -e "  ${GREEN}run | exec${RESET} ${BOLD}<cmd : mods>${RESET}   Execute mission directly 🔧"
     echo -e "  ${GREEN}examples${RESET} ${CYAN}[restore]${RESET}        Manage/restore example scripts 💡"
     echo -e "  ${GREEN}test${RESET}                     Run system test suite 🧪"
     echo -e "  ${GREEN}status${RESET}                   Check daemon pulse 💓"
@@ -98,8 +99,8 @@ print_help() {
     echo -e "    su-scheduler add yearly:12:25:0800 'echo Merry Christmas'"
     echo -e "    ${BOLD}# Boot tasks${RESET}"
     echo -e "    su-scheduler add boot settings put global airplane_mode_on 1"
-    echo -e "    ${BOLD}# Direct execution${RESET}"
-    echo -e "    su-scheduler exec 'pm list packages | grep google'"
+    echo -e "    ${BOLD}# Direct execution (with bridge)${RESET}"
+    echo -e "    su-scheduler run \"pkg list-installed : --termux\""
 }
 
 # ➕ Logic for adding new tasks
@@ -569,18 +570,43 @@ cmd_shell_send() {
     echo -e "${GREEN}📤 Command sent to shell: $task_id${RESET}"
 }
 
-# 🔧 Execute command directly
+# 🔧 Execute command directly (supporting modifiers)
 cmd_exec() {
-    cmd="$*"
-    if [ -z "$cmd" ]; then
+    full_line="$*"
+    if [ -z "$full_line" ]; then
         echo -e "${RED}❌ No command provided.${RESET}"
         exit 1
     fi
     
-    echo -e "${CYAN}${BOLD}🔧 Executing: $cmd${RESET}"
-    echo -e "${BLUE}------------------------------------------------------------${RESET}"
-    eval "$cmd"
-    exit_code=$?
+    # Remove outer quotes if present
+    full_line=$(echo "$full_line" | sed "s/^'//; s/'$//; s/^\"//; s/\"$//")
+    
+    # Check for modifiers (presence of ' : ')
+    if echo "$full_line" | grep -q " : "; then
+        cmd=$(echo "$full_line" | sed 's/ : .*//')
+        modifiers=$(echo "$full_line" | sed 's/.* : //')
+        
+        echo -e "${CYAN}${BOLD}🔧 Executing: ${YELLOW}$cmd${RESET}"
+        
+        # Build the final command
+        final_cmd="$cmd"
+        
+        # Handle --termux
+        if echo "$modifiers" | grep -q "\-\-termux"; then
+            echo -e "${MAGENTA}🐧 Environment: Termux${RESET}"
+            final_cmd="/system/bin/su-scheduler-termux exec \"$cmd\""
+        fi
+        
+        echo -e "${BLUE}------------------------------------------------------------${RESET}"
+        eval "$final_cmd"
+        exit_code=$?
+    else
+        echo -e "${CYAN}${BOLD}🔧 Executing: $full_line${RESET}"
+        echo -e "${BLUE}------------------------------------------------------------${RESET}"
+        eval "$full_line"
+        exit_code=$?
+    fi
+    
     echo -e "${BLUE}------------------------------------------------------------${RESET}"
     echo -e "${BOLD}Exit Code:${RESET} $exit_code"
 }
@@ -881,7 +907,7 @@ case "$1" in
     task-kill) shift; cmd_task_kill "$@" ;;
     shell-attach) shift; cmd_shell_attach "$@" ;;
     shell-send) shift; cmd_shell_send "$@" ;;
-    exec) shift; cmd_exec "$@" ;;
+    exec|run) shift; cmd_exec "$@" ;;
     examples) shift; cmd_examples "$@" ;;
     test) cmd_test ;;
     status) cmd_status ;;

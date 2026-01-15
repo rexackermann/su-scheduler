@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.3.8"
+VERSION="1.3.9"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -404,7 +404,13 @@ parse_modifiers() {
     delete_after=0
     interactive=0
     use_termux=0
+    run_once_now=0
     custom_msg=""
+    
+    # Check for --run-once-now
+    if echo "$line" | grep -q ": --run-once-now"; then
+        run_once_now=1
+    fi
     
     # Check for --notify-start
     if echo "$line" | grep -q ": --notify-start"; then
@@ -580,6 +586,22 @@ while true; do
             trigger=$(echo "$clean_line" | awk '{print $1}')
             trigger_norm=$(echo "$trigger" | sed 's/://g')
             
+            # 🚀 Check for immediate execution request
+            parse_modifiers "$clean_line"
+            if [ "$run_once_now" = "1" ]; then
+                log_msg "INFO" "⚡ Immediate execution triggered: $trigger"
+                cmd_to_run=$(echo "$clean_line" | cut -d' ' -f2- | sed 's/;.*:.*//; s/--run-once-now//; s/  */ /g; s/ :$/ /; s/ : ;/:/')
+                task_counter=$((task_counter + 1))
+                task_id="immediate_${task_counter}_$(date +%s)"
+                execute_task "$task_id" "$cmd_to_run" "$notify_start" "$notify_end" "$custom_msg" "$interactive" "$use_termux" < /dev/null
+                
+                # Prune the --run-once-now modifier from the file
+                log_msg "INFO" "✂️ Pruning --run-once-now from config"
+                # We use a unique marker to avoid double-processing during sed
+                sed -i "s/$line/$(echo "$line" | sed 's/--run-once-now//; s/  */ /g; s/ :[ \t]*$//; s/[ \t]*$//')/" "$CONFIG_FILE"
+                continue
+            fi
+
             # 🎯 Check advanced schedules
             if should_run_advanced_schedule "$trigger" "$current_time"; then
                 log_msg "INFO" "📅 Advanced schedule matched: $trigger"
