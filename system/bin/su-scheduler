@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.6.2"
+VERSION="1.6.3"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -247,11 +247,12 @@ cmd_log() {
 # 📋 List ONLY currently running tasks
 cmd_tasks() {
     echo -e "${BOLD}${CYAN}📋 Active Running Tasks:${RESET}"
-    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    echo -e "${BLUE}============================================================${RESET}"
     
     found_running=0
     if [ -d "$TASKS_DIR" ]; then
-        for task_dir in "$TASKS_DIR"/*; do
+        # Sort by timestamp (the last part of the task ID)
+        for task_dir in $(ls -d "$TASKS_DIR"/* 2>/dev/null | sort -t_ -k3 -n); do
             if [ -d "$task_dir" ]; then
                 pid="N/A"
                 [ -f "$task_dir/pid.txt" ] && pid=$(cat "$task_dir/pid.txt")
@@ -266,17 +267,21 @@ cmd_tasks() {
                     fi
                     
                     # 🔍 Master State Verification: Record must say RUNNING
-                    # This prevents stale PIDs from showing up as active tasks
                     [ ! -f "$task_dir/status.txt" ] && continue
                     [ "$(cat "$task_dir/status.txt")" != "RUNNING" ] && continue
                     
                     command="N/A"
                     [ -f "$task_dir/command.txt" ] && command=$(cat "$task_dir/command.txt")
                     
-                    echo -e "${BOLD}Task ID:${RESET} ${CYAN}$task_id${RESET}"
-                    echo -e "  Status: ${GREEN}RUNNING${RESET} | PID: $pid"
-                    echo -e "  Command: ${MAGENTA}$command${RESET}"
-                    echo ""
+                    # 🚫 Skip commented out commands
+                    if echo "$command" | grep -q "^[ \t]*#"; then
+                        continue
+                    fi
+                    
+                    echo -e "  ${BOLD}${BLUE}ID:${RESET}   ${CYAN}$task_id${RESET}"
+                    echo -e "  ${BOLD}${BLUE}STAT:${RESET} ${GREEN}RUNNING${RESET} | ${YELLOW}PID: $pid${RESET}"
+                    echo -e "  ${BOLD}${BLUE}CMD:${RESET}  ${MAGENTA}$command${RESET}"
+                    echo -e "${BLUE}------------------------------------------------------------${RESET}"
                     found_running=1
                 fi
             fi
@@ -285,8 +290,8 @@ cmd_tasks() {
     
     if [ $found_running -eq 0 ]; then
         echo -e "${YELLOW}No active tasks currently running.${RESET}"
+        echo -e "${BLUE}------------------------------------------------------------${RESET}"
     fi
-    echo -e "${BLUE}------------------------------------------------------------${RESET}"
 }
 
 # 📜 List ALL tasks (History)
