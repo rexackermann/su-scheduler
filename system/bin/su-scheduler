@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.6.0"
+VERSION="1.6.1"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -256,9 +256,14 @@ cmd_tasks() {
                 pid="N/A"
                 [ -f "$task_dir/pid.txt" ] && pid=$(cat "$task_dir/pid.txt")
                 
-                # Check if process is still alive
+                # Check if process is still alive and NOT a startup task
                 if [ "$pid" != "N/A" ] && [ -d "/proc/$pid" ]; then
                     task_id=$(basename "$task_dir")
+                    
+                    # 🤫 Skip listing startup tasks as per user request
+                    if echo "$task_id" | grep -q "^startup_"; then
+                        continue
+                    fi
                     command="N/A"
                     [ -f "$task_dir/command.txt" ] && command=$(cat "$task_dir/command.txt")
                     
