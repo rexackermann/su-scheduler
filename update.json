@@ -1,8 +1,8 @@
 {
-  "version": "v1.4.1",
-  "versionCode": 11401,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.1/su-scheduler-v1.4.1.zip",
-  "changelog": "\ud83d\ude80 Hardened command extraction logic to fix 'tar' and 'rsync' failures. v1.4.1",
+  "version": "v1.4.2",
+  "versionCode": 11402,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.4.2/su-scheduler-v1.4.2.zip",
+  "changelog": "fix: Hardened command extraction logic to prevent modifier leakage",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
