@@ -6,7 +6,7 @@
 # Description: The background engine that makes magic happen.
 # ---------------------------------------------------------------------------------------
 
-VERSION="1.4.5"
+VERSION="1.4.6"
 
 # 🧹 CRITICAL: Clean environment to prevent shell interference
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1)
@@ -460,12 +460,6 @@ extract_command() {
     # We look for a space followed by an optional semicolon, then a colon, then a space and --
     echo "$raw_cmd" | sed 's/[ \t]*;*[ \t]*:[ \t]*--.*//'
 }
-
-# 🛡️ Single Instance Protection
-# Check multiple times to allow old process to exit during restart
-COUNT=0
-while [ $COUNT -lt 5 ]; do
-    if [ -f "$LOCK_FILE" ]; then
         PID=$(cat "$LOCK_FILE")
         if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
             if [ $COUNT -eq 0 ]; then
