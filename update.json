@@ -1,8 +1,8 @@
 {
-  "version": "v1.5.6",
-  "versionCode": 11506,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.6/su-scheduler-v1.5.6.zip",
-  "changelog": "v1.5.6: ROLLBACK & RECOVERY. Reverted to v1.5.3 stable process management logic. Fixed system crash issue.",
+  "version": "v1.5.7",
+  "versionCode": 11507,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.5.7/su-scheduler-v1.5.7.zip",
+  "changelog": "fix: Emergency rollback to v1.5.3 logic (v1.5.6)",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
