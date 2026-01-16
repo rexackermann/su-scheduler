@@ -1,8 +1,8 @@
 {
-  "version": "v1.6.6",
-  "versionCode": 11606,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.6/su-scheduler-v1.6.6.zip",
-  "changelog": "\ud83d\ude80 Playful Mission Dashboard: Overhauled the 'list' command with intelligent explanations, premium colorcoding, and strict comment filtering. v1.6.6",
+  "version": "v1.6.7",
+  "versionCode": 11607,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.7/su-scheduler-v1.6.7.zip",
+  "changelog": "feat: Playful and intelligent 'list' command dashboard",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
