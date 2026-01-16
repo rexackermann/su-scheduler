@@ -6,7 +6,7 @@
 # ---------------------------------------------------------------------------------------
 
 # Version
-VERSION="1.6.5"
+VERSION="1.6.6"
 
 # 🧹 Clean environment
 unset $(env | grep -E '^(TERMUX_|PREFIX|ANDROID_|COLORTERM|TERM_PROGRAM)' | cut -d= -f1 2>/dev/null)
@@ -155,28 +155,103 @@ cmd_add() {
 # 📜 Logic for listing scheduled tasks
 cmd_list() {
     pattern=${1:-.} # Default to showing everything
-    echo -e "${BOLD}${MAGENTA}📋 Current Schedule:${RESET}"
-    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    echo -e "${BOLD}${CYAN}📋 Your Master Mission Control:${RESET}"
+    echo -e "${BLUE}============================================================${RESET}"
     if [ ! -f "$CONFIG_FILE" ]; then
-        echo -e "${YELLOW}Empty. No tasks scheduled yet.${RESET}"
+        echo -e "${YELLOW}Empty. No missions assigned yet.${RESET}"
         return
     fi
     
-    # 🎨 Colorize the list based on task type
-    grep -iE "$pattern" "$CONFIG_FILE" | nl -w2 -s'. ' | while read -r line; do
-        if echo "$line" | grep -qi "boot "; then
-             echo -e "${YELLOW}$line${RESET} ${CYAN}🏁${RESET}"
-        elif echo "$line" | grep -q "\-\-delete"; then
-             echo -e "${RED}$line${RESET} ${MAGENTA}💥${RESET}"
-        elif echo "$line" | grep -q "\-\-notify"; then
-             echo -e "${CYAN}$line${RESET} ${GREEN}📢${RESET}"
-        elif echo "$line" | grep -q "\-\-interactive"; then
-             echo -e "${MAGENTA}$line${RESET} ${BLUE}🎮${RESET}"
+    found_any=0
+    # Clean listing: ignore comments and empty lines
+    grep -v '^[[:space:]]*#' "$CONFIG_FILE" | grep -v '^[[:space:]]*$' | grep -iE "$pattern" | while read -r line; do
+        found_any=1
+        # Extract parts
+        trigger=$(echo "$line" | awk '{print $1}')
+        # Strip trigger from start
+        cmd_part=$(echo "$line" | sed "s/^$trigger //")
+        
+        # Split cmd and mods if ' : ' exists
+        if echo "$cmd_part" | grep -q " : "; then
+            cmd_text=$(echo "$cmd_part" | sed 's/ : .*//')
+            mods=$(echo "$cmd_part" | sed -n 's/.* : //p')
         else
-             echo -e "$line"
+            cmd_text="$cmd_part"
+            mods=""
         fi
+        
+        # 🎭 Playful Logic Engine
+        explanation="Standard operation."
+        icon="✨"
+        color="${BLUE}"
+        
+        # Trigger Analysis
+        case "$trigger" in
+            boot) 
+                explanation="Wakes up with the system."
+                icon="🏁"
+                color="${YELLOW}"
+                ;;
+            weekly*)
+                explanation="A weekly tradition."
+                icon="📅"
+                color="${GREEN}"
+                ;;
+            monthly*)
+                explanation="The monthly ritual."
+                icon="📆"
+                color="${MAGENTA}"
+                ;;
+            yearly*)
+                explanation="An annual anniversary."
+                icon="🎆"
+                color="${RED}"
+                ;;
+            *)
+                # Check for standard time (HHMM or HH:MM)
+                trigger_clean=$(echo "$trigger" | sed 's/://g')
+                if echo "$trigger_clean" | grep -q '^[0-9]\{4\}$'; then
+                    explanation="Scheduled for $(echo "$trigger_clean" | sed 's/\(..\)\(..\)/\1:\2/') daily."
+                    icon="⏰"
+                    color="${CYAN}"
+                else
+                    explanation="A mysterious custom routine."
+                    icon="⚙️"
+                    color="${GREEN}"
+                fi
+                ;;
+        esac
+        
+        # Modifier Overlays
+        if echo "$mods" | grep -q "\-\-run-once-now"; then
+             explanation="Executing lightning fast, right now! ⚡"
+             icon="🔥"
+             color="${RED}"
+        fi
+        
+        if echo "$mods" | grep -q "\-\-termux"; then
+             explanation="$explanation (Termux Native 🐧)"
+        fi
+        
+        if echo "$mods" | grep -q "\-\-notify"; then
+             explanation="$explanation - Full alerts active 📢"
+        fi
+
+        if echo "$mods" | grep -q "\-\-delete"; then
+             explanation="$explanation - Self-destruct enabled 💥"
+        fi
+        
+        # 📤 Pretty Print
+        echo -e " ${BOLD}${color}${trigger}${RESET} ${icon}"
+        echo -e "   ${BOLD}${BLUE}Action:${RESET} ${MAGENTA}${cmd_text}${RESET}"
+        echo -e "   ${BOLD}${YELLOW}Vibe:${RESET}   ${explanation}"
+        echo -e "${BLUE}------------------------------------------------------------${RESET}"
     done
-    echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    
+    if [ $found_any -eq 0 ]; then
+        echo -e "${YELLOW}No active missions matching '$pattern' were found in the scrolls.${RESET}"
+        echo -e "${BLUE}------------------------------------------------------------${RESET}"
+    fi
 }
 
 # 🗑️ Logic for removing tasks (by line number or text match)
