@@ -1,8 +1,8 @@
 {
-  "version": "v1.6.7",
-  "versionCode": 11607,
-  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.7/su-scheduler-v1.6.7.zip",
-  "changelog": "\ud83d\ude80 The Mission Auditor: Intelligent task tracking, execution gap analysis, and pro-grade audit feed. v1.6.7",
+  "version": "v1.6.8",
+  "versionCode": 11608,
+  "downloadURL": "https://github.com/rexackermann/su-scheduler/releases/download/v1.6.8/su-scheduler-v1.6.8.zip",
+  "changelog": "chore: Finalizing v1.6.7 Mission Auditor release",
   "forumURL": "https://github.com/rexackermann/su-scheduler",
   "updateType": "stable"
 }
