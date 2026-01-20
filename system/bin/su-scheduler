@@ -94,6 +94,7 @@ print_help() {
     echo -e "  ${GREEN}edit${RESET} ${CYAN}[editor]${RESET}             Crack open the config 🎨"
     echo -e "  ${GREEN}log${RESET} ${YELLOW}[-f|-n NUM]${RESET}          View logs (-f=follow, -n=lines) 🕵️"
     echo -e "  ${GREEN}tasks${RESET}                    List only running tasks 📋"
+    echo -e "  ${GREEN}audit${RESET} ${YELLOW}[-f|-n NUM|clear]${RESET}    The Mission Auditor feed 🕵️"
     echo -e "  ${GREEN}history | all-tasks${RESET}      List all tasks (running & finished) 📜"
     echo -e "  ${GREEN}task-info${RESET} ${CYAN}<task_id>${RESET}       Get detailed task info 🔍"
     echo -e "  ${GREEN}task-output${RESET} ${CYAN}<task_id>${RESET}     View task output 📄"
@@ -310,11 +311,39 @@ cmd_log() {
     if [ "$1" = "-f" ]; then
          echo -e "${CYAN}${BOLD}👀 Tailing logs... Press Ctrl+C to stop spying.${RESET}"
          tail -f "$LOG_FILE"
-    elif [ "$1" = "-n" ] && [ -n "$2" ]; then
-         tail -n "$2" "$LOG_FILE"
     else
          echo -e "${BOLD}${MAGENTA}📖 Historical Log (Last 20):${RESET}"
          tail -n 20 "$LOG_FILE"
+    fi
+}
+
+# 🔍 Mission Auditor Feed
+cmd_audit() {
+    AUDIT_DIR="$DATA_DIR/audit"
+    AUDIT_LOG="$AUDIT_DIR/audit.log"
+    
+    if [ ! -f "$AUDIT_LOG" ]; then
+        echo -e "${YELLOW}The Mission Auditor is silent... No records found yet.${RESET}"
+        return
+    fi
+    
+    if [ "$1" = "clear" ]; then
+        echo -e "${RED}${BOLD}🔥 Purging mission audit records...${RESET}"
+        rm -i "$AUDIT_LOG" && touch "$AUDIT_LOG"
+        return
+    fi
+    
+    if [ "$1" = "-f" ]; then
+         echo -e "${CYAN}${BOLD}👀 Tailing mission audit... Press Ctrl+C to disconnect.${RESET}"
+         tail -f "$AUDIT_LOG"
+    elif [ "$1" = "-n" ] && [ -n "$2" ]; then
+         tail -n "$2" "$AUDIT_LOG"
+    else
+         echo -e "${BOLD}${CYAN}🔍 Mission Audit Feed (Last 20 events):${RESET}"
+         echo -e "${BLUE}============================================================${RESET}"
+         tail -n 20 "$AUDIT_LOG"
+         echo -e "${BLUE}============================================================${RESET}"
+         echo -e "   ${CYAN}💡 Pro Tip: Run 'su-scheduler audit -f' for real-time tracking!${RESET}"
     fi
 }
 
@@ -1091,6 +1120,7 @@ case "$1" in
     log) shift; cmd_log "$@" ;;
     clear-log) echo -n "" > "$LOG_FILE"; echo -e "${GREEN}🧹 Log cleared.${RESET}" ;;
     tasks) cmd_tasks ;;
+    audit) shift; cmd_audit "$@" ;;
     history|all-tasks) cmd_tasks_history ;;
     task-info) shift; cmd_task_info "$@" ;;
     task-output) shift; cmd_task_output "$@" ;;

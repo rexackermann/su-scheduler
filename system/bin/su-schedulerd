@@ -23,6 +23,10 @@ LOG_FILE="$DATA_DIR/su-scheduler.log"              # The diary of everything tha
 LOCK_FILE="/dev/.su_scheduler.lock"          # Making sure only one ghost is in the machine
 TASKS_DIR="$DATA_DIR/tasks"                  # Where individual task processes live
 SHELLS_DIR="$DATA_DIR/shells"                # Interactive shell session storage
+AUDIT_DIR="$DATA_DIR/audit"                  # Where the Mission Auditor keeps its notes
+AUDIT_LOG="$AUDIT_DIR/audit.log"             # The historical record of changes and gaps
+CONFIG_SNAPSHOT="$AUDIT_DIR/config.snapshot" # The last known good state of your config
+LAST_PULSE_FILE="$AUDIT_DIR/last_pulse"     # Tracking the daemon's heartbeat
 
 # 🎨 Color codes for beautiful logging
 C_RESET='\033[0m'
@@ -37,6 +41,8 @@ C_BOLD='\033[1m'
 # 🏗️ Ensure our workspace directories exist
 mkdir -p "$TASKS_DIR"
 mkdir -p "$SHELLS_DIR"
+mkdir -p "$AUDIT_DIR"
+[ ! -f "$AUDIT_LOG" ] && touch "$AUDIT_LOG"
 
 # 📝 Function to log events with pretty timestamps and colors
 log_msg() {
@@ -55,6 +61,23 @@ log_msg() {
     
     # Log to file with colors (for cat/tail viewing)
     echo -e "${color}${C_BOLD}[$timestamp]${C_RESET} ${color}[$level]${C_RESET} $message" >> "$LOG_FILE"
+}
+
+# 🔍 Specialized Audit Logging
+log_audit() {
+    local type="$1"
+    local message="$2"
+    local timestamp="$(date "+%Y-%m-%d %H:%M:%S")"
+    
+    case "$type" in
+        CHANGE)  color="${C_CYAN}"   ; icon="📝" ;;
+        GAP)     color="${C_RED}"    ; icon="⚠️"  ;;
+        SUCCESS) color="${C_GREEN}"  ; icon="✅" ;;
+        WARNING) color="${C_YELLOW}" ; icon="❗" ;;
+        *)       color="${C_WHITE}"  ; icon="🔍" ;;
+    esac
+    
+    echo -e "${C_BOLD}${color}[$timestamp]${C_RESET} ${color}$icon [$type] $message${C_RESET}" >> "$AUDIT_LOG"
 }
 
 # 📅 Function to check if task should run based on advanced scheduling
@@ -204,6 +227,61 @@ send_notification() {
     
     # Log that we sent a notification
     log_msg "INFO" "📢 Notification sent [$tag]: $title - $message"
+}
+
+# 📝 Track Configuration Changes
+track_config_changes() {
+    [ ! -f "$CONFIG_FILE" ] && return
+    
+    # If no snapshot exists, create one and return
+    if [ ! -f "$CONFIG_SNAPSHOT" ]; then
+        cp "$CONFIG_FILE" "$CONFIG_SNAPSHOT"
+        return
+    fi
+    
+    # Check for additions/modifications (lines in config not in snapshot)
+    cat "$CONFIG_FILE" | while read -r line; do
+        # Ignore comments and empty lines
+        clean_line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+        [ -z "$clean_line" ] || echo "$clean_line" | grep -q "^#" && continue
+        
+        if ! grep -qF "$line" "$CONFIG_SNAPSHOT"; then
+             trigger=$(echo "$clean_line" | awk '{print $1}')
+             log_audit "CHANGE" "New mission assignment detected: $trigger"
+        fi
+    done
+    
+    # Check for removals
+    cat "$CONFIG_SNAPSHOT" | while read -r line; do
+        clean_line=$(echo "$line" | sed 's/^[ \t]*//;s/[ \t]*$//')
+        [ -z "$clean_line" ] || echo "$clean_line" | grep -q "^#" && continue
+        
+        if ! grep -qF "$line" "$CONFIG_FILE" && ! echo "$line" | grep -q "\-\-run-once-now"; then
+             trigger=$(echo "$clean_line" | awk '{print $1}')
+             log_audit "CHANGE" "Mission terminated/removed: $trigger"
+        fi
+    done
+    
+    # Sync snapshot
+    cp "$CONFIG_FILE" "$CONFIG_SNAPSHOT"
+}
+
+# ⚠️ Audit Execution Gaps (Downtime Detection)
+audit_check_gaps() {
+    local now_ts=$(date +%s)
+    
+    if [ -f "$LAST_PULSE_FILE" ]; then
+        local last_pulse=$(cat "$LAST_PULSE_FILE")
+        local diff=$((now_ts - last_pulse))
+        
+        # If the gap is longer than 70 seconds (1 min buffer), something happened
+        if [ $diff -gt 75 ]; then
+            local gap_min=$((diff / 60))
+            log_audit "GAP" "Station offline for ~$gap_min minutes. Some missions may have been skipped."
+        fi
+    fi
+    
+    echo "$now_ts" > "$LAST_PULSE_FILE"
 }
 
 # 🚀 Function to execute a task in its own isolated process
